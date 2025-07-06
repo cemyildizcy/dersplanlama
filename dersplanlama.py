@@ -23,17 +23,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Veritabanı nesnesini oluşturuyoruz
 db = SQLAlchemy(app)
 
-# // --- GEÇİCİ KOD BAŞLANGICI (TABLOLARI VE İLK ADMİNİ OLUŞTURUR) --- //
-with app.app_context():
-    db.create_all()
-    # 'admin' kullanıcısı yoksa oluştur
-    if not User.query.filter_by(username='admin').first():
-        hashed_password = generate_password_hash('Cemyildiz10.')
-        admin_user = User(username='admin', password=hashed_password, is_admin=True)
-        db.session.add(admin_user)
-        db.session.commit()
-# // --- GEÇİCİ KOD BİTİŞİ (SONRA SİLİNECEK) --- //
-
 # --- VERİTABANI MODELLERİ ---
 # Kullanıcı modelini tanımlıyoruz
 class User(db.Model):
@@ -62,6 +51,16 @@ class AltBaslik(db.Model):
     notlar = db.Column(db.Text)
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
 
+# // --- GEÇİCİ KODU TAM OLARAK BURAYA EKLEYİN --- //
+with app.app_context():
+    db.create_all()
+    # 'admin' kullanıcısı yoksa oluştur
+    if not User.query.filter_by(username='admin').first():
+        hashed_password = generate_password_hash('Cemyildiz10.')
+        admin_user = User(username='admin', password=hashed_password, is_admin=True)
+        db.session.add(admin_user)
+        db.session.commit()
+# // --- GEÇİCİ KOD BİTİŞİ --- //
 
 # --- YARDIMCI FONKSİYONLAR ---
 
