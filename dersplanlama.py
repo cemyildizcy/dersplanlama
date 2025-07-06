@@ -13,10 +13,18 @@ app = Flask(__name__)
 # Güvenli konfigürasyon: Ayarları ortam değişkenlerinden alıyoruz
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'varsayilan_cok_gizli_bir_anahtar_12345')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///dersplanlama.db')
+# ...
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Veritabanı nesnesini oluşturuyoruz
 db = SQLAlchemy(app)
+
+# // --- GEÇİCİ KOD BAŞLANGICI (BURAYI EKLEYİN) --- //
+with app.app_context():
+    db.create_all()
+# // --- GEÇİCİ KOD BİTİŞİ --- //
+
+# --- VERİTABANI MODELLERİ (JSON yerine artık bunları kullanacağız) ---
+class User(db.Model):
+# ...
 
 
 # --- VERİTABANI MODELLERİ (JSON yerine artık bunları kullanacağız) ---
