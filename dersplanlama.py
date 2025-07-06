@@ -153,13 +153,19 @@ def user_panel():
     return render_template('user.html', dersler=dersler, selected_ders=selected_ders, selected_konu=selected_konu, kalan_gun=kalan_gun)
 
 
+# Bu blok sadece bilgisayarda `python app.py` komutuyla çalıştırıldığında devreye girer.
+# Render bu bloğu görmez.
 if __name__ == '__main__':
     with app.app_context():
+        # Veritabanı tablolarını kontrol et, yoksa oluştur
         db.create_all()
+
+        # 'admin' kullanıcısı yoksa oluştur (artık 'User' tanımını biliyor)
         if not User.query.filter_by(username='admin').first():
             hashed_password = generate_password_hash('Cemyildiz10.')
             admin_user = User(username='admin', password=hashed_password, is_admin=True)
             db.session.add(admin_user)
             db.session.commit()
-            print("Varsayılan 'admin' kullanıcısı oluşturuldu.")
+            print("--- Varsayılan 'admin' kullanıcısı oluşturuldu. ---")
+            
     app.run(debug=True)
