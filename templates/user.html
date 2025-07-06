@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <title>Ders Paneli</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <style>
+        body {
+            background-color: #f4f8fb; /* Açık ve temiz bir arka plan */
+            font-family: 'Poppins', sans-serif;
+        }
+        .navbar {
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .navbar-brand {
+            font-weight: 700;
+            color: #2c3e50 !important;
+        }
+        .main-container {
+            max-width: 1300px;
+        }
+        .sidebar, .content-area {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+            border: 1px solid #e9ecef;
+        }
+        .user-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0 auto 1rem auto;
+        }
+        .sidebar h5 {
+            color: #34495e;
+            font-weight: 600;
+        }
+        .sidebar p {
+            color: #7f8c8d;
+        }
+        .list-group-item {
+            border: none;
+            padding: 0.85rem 0;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s;
+        }
+        .list-group-item:last-child {
+            border-bottom: none;
+        }
+        .list-group-item:hover {
+            background-color: #f8f9fa;
+        }
+        .list-group-item.completed .form-check-label {
+            text-decoration: line-through;
+            color: #95a5a6;
+        }
+        .form-check-input:checked {
+            background-color: #2ecc71;
+            border-color: #2ecc71;
+        }
+        .progress {
+            height: 12px;
+            border-radius: 6px;
+        }
+        .progress-bar {
+            background: linear-gradient(90deg, #1abc9c 0%, #2ecc71 100%);
+        }
+        .form-select, .btn {
+            border-radius: 8px;
+        }
+        .btn-primary {
+            background-color: #3498db;
+            border-color: #3498db;
+        }
+        .btn-primary:hover {
+            background-color: #2980b9;
+            border-color: #2980b9;
+        }
+        .content-area h4, .sidebar h6 {
+            color: #2c3e50;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-light mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="{{ url_for('user_panel') }}"><i class="bi bi-book-half"></i> Ders Paneli</a>
+        <span class="navbar-text me-3">
+            Hoş Geldin, <strong>{{ session.get('username', 'Kullanıcı') }}</strong>!
+        </span>
+        <a class="btn btn-outline-danger" href="{{ url_for('logout') }}">Çıkış</a>
+    </div>
+</nav>
+
+<div class="container main-container">
+    <div class="row g-4">
+        <div class="col-lg-4 col-md-12">
+            <div class="sidebar">
+                <div class="user-avatar">{{ session.get('username', 'U')[0].upper() }}</div>
+                <h5 class="text-center">{{ session.get('username') }}</h5>
+                {% if kalan_gun is not none %}
+                    <p class="text-center text-muted">Kalan Erişim: {{ kalan_gun }} gün</p>
+                {% endif %}
+                <hr>
+                <h6>Konu İlerlemesi</h6>
+                <div class="progress mb-3">
+                    <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                </div>
+                <div id="progressText" class="text-center small text-muted">İlerlemeyi görmek için bir konu seçin.</div>
+            </div>
+        </div>
+
+        <div class="col-lg-8 col-md-12">
+            <div class="content-area">
+                <h4>Ders İçeriği</h4>
+                <form method="get" action="{{ url_for('user_panel') }}" id="selectionForm" class="bg-light p-3 rounded-3 mb-4 border">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md">
+                            <label for="ders_sec" class="form-label fw-bold">Ders</label>
+                            <select id="ders_sec" name="ders_id" class="form-select" onchange="document.getElementById('konu_id').value=''; this.form.submit()">
+                                <option value="">Ders seçiniz...</option>
+                                {% for ders in dersler %}
+                                    <option value="{{ ders.id }}" {% if selected_ders and selected_ders.id == ders.id %}selected{% endif %}>{{ ders.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md">
+                            <label for="konu_id" class="form-label fw-bold">Konu</label>
+                            <select id="konu_id" name="konu_id" class="form-select" onchange="this.form.submit()" {% if not selected_ders %}disabled{% endif %}>
+                                <option value="">Konu seçiniz...</option>
+                                {% if selected_ders %}
+                                    {% for konu in selected_ders.konular %}
+                                        <option value="{{ konu.id }}" {% if selected_konu and selected_konu.id == konu.id %}selected{% endif %}>{{ konu.name }}</option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                        </div>
+                    </div>
+                </form>
+
+                {% if selected_konu %}
+                    <h5>{{ selected_konu.name }}</h5>
+                    <ul class="list-group list-group-flush" id="altBaslikList">
+                        {% for alt_baslik in selected_konu.alt_basliklar %}
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="" id="check-{{ alt_baslik.id }}" onchange="toggleTamamlandi({{ alt_baslik.id }})">
+                                        <label class="form-check-label" for="check-{{ alt_baslik.id }}">
+                                            <span class="fw-bold">{{ alt_baslik.name }}</span>
+                                        </label>
+                                    </div>
+                                    <div>
+                                        {% if alt_baslik.video_link %}
+                                            {% for video in alt_baslik.video_link.split(',') %}
+                                                <a href="{{ video.strip() }}" class="btn btn-sm btn-primary" target="_blank">Video {{ loop.index }}</a>
+                                            {% endfor %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </li>
+                        {% else %}
+                            <li class="list-group-item text-muted">Bu konu için henüz alt başlık eklenmemiş.</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="alert alert-info mt-4">Lütfen içerikleri görmek için bir ders ve konu seçin.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectedKonuId = '{{ selected_konu.id if selected_konu else "" }}';
+    if (selectedKonuId) {
+        updateProgress(selectedKonuId);
+    }
+});
+
+function getProgressData() {
+    try {
+        return JSON.parse(localStorage.getItem('dersplanlama_progress') || '{}');
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveProgressData(data) {
+    localStorage.setItem('dersplanlama_progress', JSON.stringify(data));
+}
+
+function toggleTamamlandi(altBaslikId) {
+    const konuId = '{{ selected_konu.id if selected_konu else "" }}';
+    if (!konuId) return;
+
+    const allProgress = getProgressData();
+    const userProgress = allProgress['{{ session.username }}'] || {};
+    const konuProgress = userProgress[konuId] || [];
+    
+    const index = konuProgress.indexOf(altBaslikId);
+    if (index > -1) {
+        konuProgress.splice(index, 1);
+    } else {
+        konuProgress.push(altBaslikId);
+    }
+
+    userProgress[konuId] = konuProgress;
+    allProgress['{{ session.username }}'] = userProgress;
+    saveProgressData(allProgress);
+    updateProgress(konuId);
+}
+
+function updateProgress(konuId) {
+    const allProgress = getProgressData();
+    const userProgress = allProgress['{{ session.username }}'] || {};
+    const konuProgress = userProgress[konuId] || [];
+
+    const checkboxes = document.querySelectorAll('#altBaslikList .form-check-input');
+    const totalTasks = checkboxes.length;
+    let completedTasks = 0;
+
+    checkboxes.forEach(cb => {
+        const cbId = parseInt(cb.id.split('-')[1]);
+        const listItem = cb.closest('.list-group-item');
+        if (konuProgress.includes(cbId)) {
+            cb.checked = true;
+            listItem.classList.add('completed');
+            completedTasks++;
+        } else {
+            cb.checked = false;
+            listItem.classList.remove('completed');
+        }
+    });
+
+    const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+
+    if(progressBar) {
+        progressBar.style.width = percentage + '%';
+        progressBar.textContent = percentage + '%';
+        progressBar.setAttribute('aria-valuenow', percentage);
+    }
+    if(progressText) {
+        if(totalTasks > 0){
+            progressText.textContent = `${totalTasks} görevden ${completedTasks} tanesi tamamlandı.`;
+        } else {
+            progressText.textContent = "Bu konuda takip edilecek görev yok.";
+        }
+    }
+}
+</script>
+</body>
+</html>

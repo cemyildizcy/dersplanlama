@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-g">
+    <title>Admin Paneli</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); font-family: 'Montserrat', Arial, sans-serif; }
+        .navbar { background: linear-gradient(90deg, #3a8dde 0%, #6f42c1 100%) !important; }
+        .card { border-radius: 18px; box-shadow: 0 4px 24px 0 rgba(60,72,88,0.12); border: none; }
+        .btn-primary, .btn-success, .btn-info, .btn-danger, .btn-warning { border-radius: 12px; font-weight: 600; letter-spacing: 0.5px; }
+        .form-label { color: #3a8dde; font-weight: 600; }
+        input, textarea, select { border-radius: 10px !important; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark mb-4">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="{{ url_for('admin_panel') }}" style="font-size:1.7rem;letter-spacing:1px;">
+            <span style="color:#43cea2;">Ders</span><span style="color:#6f42c1;">Planlama</span> <span style="font-size:1rem;font-weight:400;">Admin</span>
+        </a>
+        <a class="btn btn-outline-light" href="{{ url_for('logout') }}">Çıkış</a>
+    </div>
+</nav>
+
+<div class="container">
+    {# Flash mesajlarını göstermek için standart blok #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category or 'info' }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Yeni Ders Ekle</h5>
+                    <form method="post" action="{{ url_for('admin_panel') }}">
+                        <input type="hidden" name="action" value="add_ders">
+                        <div class="mb-2">
+                            <input name="yeni_ders" class="form-control" placeholder="Ders adı (örn: Matematik)" required>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Ders Ekle</button>
+                    </form>
+                </div>
+            </div>
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Yeni Konu Ekle</h5>
+                    <form method="post" action="{{ url_for('admin_panel') }}">
+                        <input type="hidden" name="action" value="add_konu">
+                        <div class="mb-2">
+                            <label class="form-label">Ders Seç</label>
+                            <select name="ders_sec_konu" class="form-select" required>
+                                <option value="">Ders seçiniz</option>
+                                {% for ders in dersler %}
+                                    <option value="{{ ders.id }}">{{ ders.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Yeni Konu</label>
+                            <input name="yeni_konu" class="form-control" placeholder="Konu adı (örn: Fonksiyonlar)" required>
+                        </div>
+                        <button type="submit" class="btn btn-info w-100 text-white">Konu Ekle</button>
+                    </form>
+                </div>
+            </div>
+            <div class="card shadow mb-4">
+                 <div class="card-body">
+                    <h5 class="card-title">Yeni Alt Başlık Ekle</h5>
+                    <form method="post" action="{{ url_for('admin_panel') }}">
+                        <input type="hidden" name="action" value="add_alt_baslik">
+                        <div class="mb-2">
+                            <label class="form-label">Konu Seç</label>
+                            <select name="konu_sec_alt" class="form-select" required>
+                                <option value="">Önce bir dersin konusunu seçin</option>
+                                {% for ders in dersler %}
+                                    <optgroup label="{{ ders.name }}">
+                                        {% for konu in ders.konular %}
+                                            <option value="{{ konu.id }}">{{ konu.name }}</option>
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2"><label class="form-label">Alt Başlık</label><input name="alt_baslik" class="form-control" required></div>
+                        <div class="mb-2"><label class="form-label">Video Linki (virgülle ayırın)</label><input name="video" class="form-control"></div>
+                        <div class="mb-2"><label class="form-label">Ders Notları (virgülle ayırın)</label><textarea name="notlar" class="form-control" rows="2"></textarea></div>
+                        <button type="submit" class="btn btn-primary w-100">Alt Başlık Ekle</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <h5 class="mb-3">Mevcut İçerik</h5>
+                    <div class="accordion" id="dersAccordion">
+                    {% for ders in dersler %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header d-flex justify-content-between align-items-center p-2">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ ders.id }}">
+                                    {{ ders.name }}
+                                </button>
+                                <a href="{{ url_for('admin_panel', delete_type='ders', id=ders.id) }}" class="btn btn-sm btn-danger ms-2" onclick="return confirm('Bu dersi silerseniz içindeki tüm konular ve alt başlıklar da silinecektir. Emin misiniz?')">Sil</a>
+                            </h2>
+                            <div id="collapse-{{ ders.id }}" class="accordion-collapse collapse" data-bs-parent="#dersAccordion">
+                                <div class="accordion-body">
+                                    {% for konu in ders.konular %}
+                                        <div class="p-2 border rounded mb-2">
+                                            <strong>{{ konu.name }}</strong>
+                                            <a href="{{ url_for('admin_panel', delete_type='konu', id=konu.id) }}" class="btn btn-sm btn-warning float-end" onclick="return confirm('Konuyu silmek istediğinize emin misiniz?')">Sil</a>
+                                            <ul>
+                                            {% for alt_baslik in konu.alt_basliklar %}
+                                                <li>{{ alt_baslik.name }} <a href="{{ url_for('admin_panel', delete_type='alt_baslik', id=alt_baslik.id) }}" class="text-danger small">(sil)</a></li>
+                                            {% else %}
+                                                <li class="text-muted">Bu konuya ait alt başlık yok.</li>
+                                            {% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% else %}
+                                        <p class="text-muted">Bu derse ait konu yok.</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <p class="text-center text-muted">Henüz hiç ders eklenmemiş.</p>
+                    {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            {% if is_main_admin %}
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <h5 class="mb-3">Kullanıcı Yönetimi</h5>
+                    <form method="POST" action="{{ url_for('admin_panel') }}" class="mb-4 p-3 border rounded">
+                        <input type="hidden" name="action" value="add_user">
+                        <h6>Yeni Kullanıcı Ekle</h6>
+                        <div class="row">
+                            <div class="col"><input name="new_username" class="form-control" placeholder="Kullanıcı Adı" required></div>
+                            <div class="col"><input name="new_password" type="password" class="form-control" placeholder="Şifre" required></div>
+                            <div class="col"><input name="access_days" type="number" class="form-control" placeholder="Erişim Süresi (gün)"></div>
+                            <div class="col"><button type="submit" class="btn btn-success">Ekle</button></div>
+                        </div>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin_panel') }}" class="mb-4 p-3 border rounded">
+                        <input type="hidden" name="action" value="update_user">
+                        <h6>Kullanıcı Erişim Süresini Güncelle</h6>
+                        <div class="row">
+                            <div class="col">
+                                <select name="update_user_id" class="form-select">
+                                    {% for user in users %}{% if not user.is_admin %}<option value="{{ user.id }}">{{ user.username }}</option>{% endif %}{% endfor %}
+                                </select>
+                            </div>
+                            <div class="col"><input name="update_days" type="number" class="form-control" placeholder="Yeni Erişim Süresi (gün)" required></div>
+                            <div class="col"><button type="submit" class="btn btn-warning">Güncelle</button></div>
+                        </div>
+                    </form>
+                    <h6>Mevcut Kullanıcılar</h6>
+                    <table class="table table-sm">
+                        <thead><tr><th>Kullanıcı Adı</th><th>Admin?</th><th>Bitiş Tarihi</th><th>İşlem</th></tr></thead>
+                        <tbody>
+                        {% for user in users %}
+                            <tr>
+                                <td>{{ user.username }}</td>
+                                <td><span class="badge bg-{{ 'success' if user.is_admin else 'secondary' }}">{{ 'Evet' if user.is_admin else 'Hayır' }}</span></td>
+                                <td>{{ user.expire_date.strftime('%Y-%m-%d') if user.expire_date else '-' }}</td>
+                                <td>
+                                    {% if user.username != 'admin' %}
+                                        <a href="{{ url_for('admin_panel', delete_type='user', id=user.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Kullanıcıyı silmek istediğinize emin misiniz?')">Sil</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
