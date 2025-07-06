@@ -107,6 +107,15 @@ def logout():
 @admin_required
 def admin_panel():
     if request.method == 'POST':
+        # --- GEÇİCİ DEBUG KODU BAŞLANGICI ---
+        print("--- FORM GÖNDERİLDİ ---")
+        print("Gelen Form Verileri:", request.form)
+        action = request.form.get("action")
+        print("Gelen 'action' değeri:", action)
+        # --- GEÇİCİ DEBUG KODU SONU ---
+
+        # if action == "add_user" and is_main_admin:
+        # ... (geri kalan kod aynı kalacak)
         action = request.form.get('action')
 
         if action == "add_ders":
