@@ -106,38 +106,100 @@ def logout():
 @login_required
 @admin_required
 def admin_panel():
-    if request.method == 'POST':
-        # --- GEÇİCİ DEBUG KODU BAŞLANGICI ---
-        print("--- FORM GÖNDERİLDİ ---")
-        print("Gelen Form Verileri:", request.form)
+    is_main_admin = session.get("username") == "admin"
+
+    # --- FORM GÖNDERİLDİĞİNDE ÇALIŞACAK KISIM ---
+    if request.method == "POST":
         action = request.form.get("action")
-        print("Gelen 'action' değeri:", action)
-        # --- GEÇİCİ DEBUG KODU SONU ---
 
-        # if action == "add_user" and is_main_admin:
-        # ... (geri kalan kod aynı kalacak)
-        action = request.form.get('action')
+        # Yeni Kullanıcı Ekleme
+        if action == "add_user" and is_main_admin:
+            username = request.form.get("new_username", "").strip()
+            password = request.form.get("new_password", "").strip()
+            access_days_str = request.form.get("access_days", "").strip()
 
-        if action == "add_ders":
+            if not username or not password:
+                flash("Kullanıcı adı ve şifre boş olamaz.", "danger")
+            elif User.query.filter_by(username=username).first():
+                flash("Bu kullanıcı adı zaten mevcut.", "danger")
+            else:
+                hashed_password = generate_password_hash(password)
+                expire_date = None
+                if access_days_str.isdigit():
+                    expire_date = datetime.utcnow() + timedelta(days=int(access_days_str))
+                
+                new_user = User(username=username, password=hashed_password, is_admin=False, expire_date=expire_date)
+                db.session.add(new_user)
+                db.session.commit()
+                flash(f"'{username}' kullanıcısı başarıyla eklendi.", "success")
+            return redirect(url_for('admin_panel'))
+
+        # Yeni Ders Ekleme
+        elif action == "add_ders":
             ders_name = request.form.get("yeni_ders", "").strip()
             if ders_name and not Ders.query.filter_by(name=ders_name).first():
-                db.session.add(Ders(name=ders_name))
+                new_ders = Ders(name=ders_name)
+                db.session.add(new_ders)
                 db.session.commit()
                 flash(f"'{ders_name}' dersi eklendi.", "success")
             else:
                 flash("Ders adı boş olamaz veya bu ders zaten mevcut.", "danger")
-
-        # Diğer tüm admin işlemleri buraya eklenecek...
+            return redirect(url_for('admin_panel'))
         
+        # Yeni Konu Ekleme
+        elif action == "add_konu":
+            konu_name = request.form.get("yeni_konu", "").strip()
+            ders_id = request.form.get("ders_sec_konu", type=int)
+            if konu_name and ders_id:
+                new_konu = Konu(name=konu_name, ders_id=ders_id)
+                db.session.add(new_konu)
+                db.session.commit()
+                flash(f"'{konu_name}' konusu eklendi.", "success")
+            else:
+                flash("Konu adı veya ders seçimi boş olamaz.", "danger")
+            return redirect(url_for('admin_panel'))
+            
+        # Yeni Alt Başlık Ekleme
+        elif action == "add_alt_baslik":
+            alt_baslik_name = request.form.get("alt_baslik", "").strip()
+            konu_id = request.form.get("konu_sec_alt", type=int)
+            video_link = request.form.get("video", "").strip()
+            notlar = request.form.get("notlar", "").strip()
+            if alt_baslik_name and konu_id:
+                new_alt_baslik = AltBaslik(name=alt_baslik_name, konu_id=konu_id, video_link=video_link, notlar=notlar)
+                db.session.add(new_alt_baslik)
+                db.session.commit()
+                flash(f"'{alt_baslik_name}' alt başlığı eklendi.", "success")
+            else:
+                flash("Alt başlık veya konu seçimi boş olamaz.", "danger")
+            return redirect(url_for('admin_panel'))
+
+    # --- SAYFA İLK YÜKLENDİĞİNDE (GET İSTEĞİ) ÇALIŞACAK KISIM ---
+    
+    # Silme işlemleri
+    delete_type = request.args.get("delete_type")
+    delete_id = request.args.get("id", type=int)
+    if delete_type and delete_id:
+        item_to_delete = None
+        if delete_type == "ders": item_to_delete = Ders.query.get_or_404(delete_id)
+        elif delete_type == "konu": item_to_delete = Konu.query.get_or_404(delete_id)
+        elif delete_type == "alt_baslik": item_to_delete = AltBaslik.query.get_or_404(delete_id)
+        elif delete_type == "user" and is_main_admin: item_to_delete = User.query.get_or_404(delete_id)
+        
+        if item_to_delete:
+            if delete_type == 'user' and item_to_delete.username == 'admin':
+                flash("Ana admin kullanıcısı silinemez.", "danger")
+            else:
+                db.session.delete(item_to_delete)
+                db.session.commit()
+                flash(f"{delete_type.capitalize()} başarıyla silindi.", "success")
         return redirect(url_for('admin_panel'))
 
-    # Sayfa yüklendiğinde tüm verileri veritabanından çek
-    dersler = Ders.query.order_by(Ders.name).all()
+    # Şablona gönderilecek verileri hazırla
     users = User.query.order_by(User.username).all()
-    is_main_admin = session.get("username") == "admin"
+    dersler = Ders.query.order_by(Ders.name).all()
     
-    return render_template('admin.html', dersler=dersler, users=users, is_main_admin=is_main_admin)
-
+    return render_template('admin.html', users=users, dersler=dersler, is_main_admin=is_main_admin)
 
 @app.route("/panel", methods=["GET"])
 @login_required
