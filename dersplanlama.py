@@ -22,11 +22,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Veritabanı nesnesini oluşturuyoruz
 db = SQLAlchemy(app)
 
-# ==============================================================================
-# === GEÇİCİ KOD: İLK KURULUM İÇİN TABLOLARI OLUŞTUR (SONRA SİLİNECEK) ===
-# ==============================================================================
-with app.app_context():
-    db.create_all()
+
 # ==============================================================================
 
 # --- VERİTABANI MODELLERİ ---
