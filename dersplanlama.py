@@ -19,15 +19,25 @@ if database_url and database_url.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///dersplanlama.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# ...
 # Veritabanı nesnesini oluşturuyoruz
 db = SQLAlchemy(app)
 
-
-# ==============================================================================
+# // --- GEÇİCİ KOD BAŞLANGICI (TABLOLARI VE İLK ADMİNİ OLUŞTURUR) --- //
+with app.app_context():
+    db.create_all()
+    # 'admin' kullanıcısı yoksa oluştur
+    if not User.query.filter_by(username='admin').first():
+        hashed_password = generate_password_hash('Cemyildiz10.')
+        admin_user = User(username='admin', password=hashed_password, is_admin=True)
+        db.session.add(admin_user)
+        db.session.commit()
+# // --- GEÇİCİ KOD BİTİŞİ (SONRA SİLİNECEK) --- //
 
 # --- VERİTABANI MODELLERİ ---
-
+# Kullanıcı modelini tanımlıyoruz
 class User(db.Model):
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(256), nullable=False)
@@ -155,17 +165,19 @@ def user_panel():
 
 # Bu blok sadece bilgisayarda `python app.py` komutuyla çalıştırıldığında devreye girer.
 # Render bu bloğu görmez.
+# Bu blok sadece bilgisayarda `python app.py` komutuyla çalıştırıldığında devreye girer.
+# Render bu bloğu görmez.
 if __name__ == '__main__':
     with app.app_context():
-        # Veritabanı tablolarını kontrol et, yoksa oluştur
+        # Lokal veritabanı için tabloları kontrol et, yoksa oluştur.
         db.create_all()
 
-        # 'admin' kullanıcısı yoksa oluştur (artık 'User' tanımını biliyor)
+        # Lokal veritabanında 'admin' kullanıcısı yoksa, test için oluştur.
         if not User.query.filter_by(username='admin').first():
             hashed_password = generate_password_hash('Cemyildiz10.')
             admin_user = User(username='admin', password=hashed_password, is_admin=True)
             db.session.add(admin_user)
             db.session.commit()
-            print("--- Varsayılan 'admin' kullanıcısı oluşturuldu. ---")
+            print("--- Lokal veritabanı için varsayılan 'admin' kullanıcısı oluşturuldu. ---")
             
     app.run(debug=True)
