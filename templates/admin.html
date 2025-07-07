@@ -6,21 +6,157 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
-        body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); font-family: 'Montserrat', Arial, sans-serif; }
-        .navbar { background: linear-gradient(90deg, #3a8dde 0%, #6f42c1 100%) !important; }
-        .card { border-radius: 18px; box-shadow: 0 4px 24px 0 rgba(60,72,88,0.12); border: none; }
-        .btn { border-radius: 12px; font-weight: 600; }
-        .form-label { color: #3a8dde; font-weight: 600; }
-        input, textarea, select { border-radius: 10px !important; }
-        .accordion-button:not(.collapsed) { background-color: #e7f1ff; color: #0c63e4; }
+        body { 
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); 
+            font-family: 'Montserrat', Arial, sans-serif; 
+            min-height: 100vh;
+        }
+        .navbar { 
+            background: linear-gradient(90deg, #3a8dde 0%, #6f42c1 100%) !important; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .navbar-brand {
+            font-size: 1.7rem;
+            letter-spacing: 1px;
+            font-weight: 700;
+        }
+        .card { 
+            border-radius: 18px; 
+            box-shadow: 0 4px 24px 0 rgba(60,72,88,0.12); 
+            border: none; 
+            margin-bottom: 1.5rem; /* Kartlar arası boşluk */
+        }
+        .btn { 
+            border-radius: 12px; 
+            font-weight: 600; 
+            transition: all 0.3s ease;
+        }
+        .btn-success {
+            background-color: #28a745;
+            border-color: #28a745;
+        }
+        .btn-success:hover {
+            background-color: #218838;
+            border-color: #1e7e34;
+        }
+        .btn-info {
+            background-color: #17a2b8;
+            border-color: #17a2b8;
+        }
+        .btn-info:hover {
+            background-color: #138496;
+            border-color: #117a8b;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        .btn-primary:hover {
+            background-color: #0069d9;
+            border-color: #0062cc;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+        .btn-warning {
+            background-color: #ffc107;
+            border-color: #ffc107;
+            color: #212529; /* Darker text for better contrast */
+        }
+        .btn-warning:hover {
+            background-color: #e0a800;
+            border-color: #d39e00;
+        }
+        .btn-secondary-edit { /* Yeni düzenleme butonu rengi için */
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary-edit:hover {
+            background-color: #5a6268;
+            border-color: #545b62;
+            color: white;
+        }
+
+
+        .form-label { 
+            color: #3a8dde; 
+            font-weight: 600; 
+            margin-bottom: .5rem;
+        }
+        input, textarea, select { 
+            border-radius: 10px !important; 
+            padding: .75rem 1rem;
+            border: 1px solid #ced4da;
+        }
+        input:focus, textarea:focus, select:focus {
+            border-color: #80bdff;
+            box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25);
+        }
+        .accordion-button:not(.collapsed) { 
+            background-color: #e7f1ff; 
+            color: #0c63e4; 
+            font-weight: 600;
+        }
+        .accordion-button {
+            border-radius: 10px !important;
+        }
+        .accordion-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            overflow: hidden; /* Ensure border-radius applies */
+        }
+        .accordion-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 0; /* Remove default padding */
+        }
+        .accordion-button:focus {
+            box-shadow: none; /* Remove default focus outline */
+        }
+        .accordion-body ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .accordion-body ul li {
+            padding: 5px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        .accordion-body ul li:last-child {
+            border-bottom: none;
+        }
+        .table thead th {
+            background-color: #f0f2f5;
+            color: #3a8dde;
+            font-weight: 700;
+        }
+        .table tbody tr:hover {
+            background-color: #e9ecef;
+        }
+        .badge {
+            font-size: 0.85em;
+            padding: 0.5em 0.75em;
+            border-radius: 0.5rem;
+        }
+        .alert {
+            border-radius: 10px;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
 
 <nav class="navbar navbar-expand-lg navbar-dark mb-4">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="{{ url_for('admin_panel') }}" style="font-size:1.7rem;letter-spacing:1px;">Admin Paneli</a>
+        <a class="navbar-brand fw-bold" href="{{ url_for('admin_panel') }}">Admin Paneli</a>
         <a class="btn btn-outline-light" href="{{ url_for('logout') }}">Çıkış</a>
     </div>
 </nav>
@@ -39,7 +175,7 @@
 
     <div class="row">
         <div class="col-md-4">
-            <div class="card shadow mb-4">
+            <div class="card shadow">
                 <div class="card-body">
                     <h5 class="card-title">Yeni Ders Ekle</h5>
                     <form method="post" action="{{ url_for('admin_panel') }}">
@@ -51,7 +187,7 @@
                     </form>
                 </div>
             </div>
-            <div class="card shadow mb-4">
+            <div class="card shadow">
                 <div class="card-body">
                     <h5 class="card-title">Yeni Konu Ekle</h5>
                     <form method="post" action="{{ url_for('admin_panel') }}">
@@ -73,7 +209,7 @@
                     </form>
                 </div>
             </div>
-            <div class="card shadow mb-4">
+            <div class="card shadow">
                 <div class="card-body">
                     <h5 class="card-title">Yeni Alt Başlık Ekle</h5>
                     <form method="post" action="{{ url_for('admin_panel') }}">
@@ -98,10 +234,63 @@
                     </form>
                 </div>
             </div>
+
+            {# Yeni Duyuru Ekleme Kartı #}
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="card-title">Yeni Duyuru Ekle</h5>
+                    <form method="post" action="{{ url_for('admin_panel') }}">
+                        <input type="hidden" name="action" value="add_announcement">
+                        <div class="mb-2">
+                            <label class="form-label">Duyuru Başlığı</label>
+                            <input name="announcement_title" class="form-control" placeholder="Örn: Sistem Bakımı" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Duyuru İçeriği</label>
+                            <textarea name="announcement_content" class="form-control" rows="3" placeholder="Duyuru detayları..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">Duyuru Ekle</button>
+                    </form>
+                </div>
+            </div>
+
+            {# Yeni Materyal Ekleme Kartı #}
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="card-title">Yeni Materyal Yükle</h5>
+                    <form method="post" action="{{ url_for('admin_panel') }}" enctype="multipart/form-data">
+                        <input type="hidden" name="action" value="add_material">
+                        <div class="mb-2">
+                            <label class="form-label">Hangi Alt Başlığa Eklenecek?</label>
+                            <select name="alt_baslik_sec_materyal" class="form-select" required>
+                                <option value="" disabled selected>Alt Başlık Seçiniz</option>
+                                {% for ders in dersler %}
+                                    <optgroup label="{{ ders.name }}">
+                                        {% for konu in ders.konular %}
+                                            <optgroup label="&nbsp;&nbsp;&nbsp;{{ konu.name }}">
+                                                {% for alt_baslik in konu.alt_basliklar %}
+                                                    <option value="{{ alt_baslik.id }}">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ alt_baslik.name }}</option>
+                                                {% endfor %}
+                                            </optgroup>
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label for="material_file" class="form-label">Dosya Seçin</label>
+                            <input type="file" class="form-control" id="material_file" name="file" required>
+                            <small class="form-text text-muted">İzin verilen uzantılar: pdf, doc, docx, ppt, pptx, xls, xlsx, zip, rar, txt</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Materyal Yükle</button>
+                    </form>
+                </div>
+            </div>
+            
         </div>
         
         <div class="col-md-8">
-            <div class="card shadow mb-4">
+            <div class="card shadow">
                 <div class="card-body">
                     <h5 class="mb-3">Mevcut İçerik</h5>
                     <div class="accordion" id="dersAccordion">
@@ -109,17 +298,65 @@
                         <div class="accordion-item">
                             <h2 class="accordion-header d-flex justify-content-between align-items-center p-2">
                                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ ders.id }}">{{ ders.name }}</button>
-                                <a href="{{ url_for('admin_panel', delete_type='ders', id=ders.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Bu dersi silerseniz içindeki tüm konular ve alt başlıklar da silinecektir. Emin misiniz?')">Sil</a>
+                                <div class="d-flex gap-2 me-2">
+                                    <a href="{{ url_for('edit_ders', ders_id=ders.id) }}" class="btn btn-sm btn-secondary-edit"><i class="bi bi-pencil-square"></i> Düzenle</a>
+                                    {# Silme butonu artık form içinde #}
+                                    <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
+                                        <input type="hidden" name="delete_type" value="ders">
+                                        <input type="hidden" name="id" value="{{ ders.id }}">
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Bu dersi silerseniz içindeki tüm konular ve alt başlıklar da silinecektir. Emin misiniz?')"><i class="bi bi-trash"></i> Sil</button>
+                                    </form>
+                                </div>
                             </h2>
                             <div id="collapse-{{ ders.id }}" class="accordion-collapse collapse" data-bs-parent="#dersAccordion">
                                 <div class="accordion-body">
                                     {% for konu in ders.konular %}
-                                        <div class="p-2 border rounded mb-2">
-                                            <strong>{{ konu.name }}</strong>
-                                            <a href="{{ url_for('admin_panel', delete_type='konu', id=konu.id) }}" class="btn btn-sm btn-warning float-end" onclick="return confirm('Konuyu silmek istediğinize emin misiniz?')">Sil</a>
-                                            <ul class="mt-2">
+                                        <div class="p-2 border rounded mb-2 d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>{{ konu.name }}</strong>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <a href="{{ url_for('edit_konu', konu_id=konu.id) }}" class="btn btn-sm btn-secondary-edit"><i class="bi bi-pencil-square"></i> Düzenle</a>
+                                                {# Silme butonu artık form içinde #}
+                                                <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
+                                                    <input type="hidden" name="delete_type" value="konu">
+                                                    <input type="hidden" name="id" value="{{ konu.id }}">
+                                                    <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Konuyu silmek istediğinize emin misiniz?')"><i class="bi bi-trash"></i> Sil</button>
+                                                </form>
+                                            </div>
+                                            <ul class="mt-2 w-100">
                                             {% for alt_baslik in konu.alt_basliklar %}
-                                                <li>{{ alt_baslik.name }} <a href="{{ url_for('admin_panel', delete_type='alt_baslik', id=alt_baslik.id) }}" class="text-danger small">(sil)</a></li>
+                                                <li class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        {{ alt_baslik.name }} 
+                                                    </div>
+                                                    <div class="d-flex gap-2">
+                                                        <a href="{{ url_for('edit_alt_baslik', alt_baslik_id=alt_baslik.id) }}" class="btn btn-sm btn-secondary-edit"><i class="bi bi-pencil-square"></i> Düzenle</a>
+                                                        {# Silme butonu artık form içinde #}
+                                                        <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
+                                                            <input type="hidden" name="delete_type" value="alt_baslik">
+                                                            <input type="hidden" name="id" value="{{ alt_baslik.id }}">
+                                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Alt başlığı silmek istediğinize emin misiniz?')"><i class="bi bi-trash"></i> Sil</button>
+                                                        </form>
+                                                    </div>
+                                                    {% if alt_baslik.materials %}
+                                                        <ul class="list-unstyled ms-3 mt-1 small w-100">
+                                                            {% for material in alt_baslik.materials %}
+                                                                <li class="d-flex justify-content-between align-items-center">
+                                                                    <div>
+                                                                        <i class="bi bi-file-earmark-arrow-down-fill me-1"></i> {{ material.original_filename }} 
+                                                                    </div>
+                                                                    {# Materyal sil butonu artık form içinde #}
+                                                                    <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
+                                                                        <input type="hidden" name="delete_type" value="material">
+                                                                        <input type="hidden" name="id" value="{{ material.id }}">
+                                                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Bu materyali silmek istediğinize emin misiniz? Bu işlem dosyayı sunucudan da siler.')"><i class="bi bi-trash"></i> Sil</button>
+                                                                    </form>
+                                                                </li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                    {% endif %}
+                                                </li>
                                             {% else %}
                                                 <li class="text-muted small">Bu konuya ait alt başlık yok.</li>
                                             {% endfor %}
@@ -138,8 +375,36 @@
                 </div>
             </div>
             
+            {# Mevcut Duyurular Kartı #}
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="mb-3">Mevcut Duyurular</h5>
+                    {% if announcements %}
+                        <ul class="list-group">
+                            {% for announcement in announcements %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ announcement.title }}</strong> 
+                                        <small class="text-muted">({{ announcement.created_at.strftime('%Y-%m-%d %H:%M') }})</small><br>
+                                        <p class="mb-0">{{ announcement.content }}</p>
+                                    </div>
+                                    {# Duyuru sil butonu artık form içinde #}
+                                    <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
+                                        <input type="hidden" name="delete_type" value="announcement">
+                                        <input type="hidden" name="id" value="{{ announcement.id }}">
+                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Bu duyuruyu silmek istediğinize emin misiniz?')"><i class="bi bi-trash"></i> Sil</button>
+                                    </form>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted text-center">Henüz hiç duyuru eklenmemiş.</p>
+                    {% endif %}
+                </div>
+            </div>
+
             {% if is_main_admin %}
-            <div class="card shadow mb-4">
+            <div class="card shadow">
                 <div class="card-body">
                     <h5 class="mb-3">Kullanıcı Yönetimi</h5>
                     <form method="POST" action="{{ url_for('admin_panel') }}" class="mb-4 p-3 border rounded">
@@ -165,7 +430,12 @@
                                     <td>{{ user.expire_date.strftime('%Y-%m-%d') if user.expire_date else '-' }}</td>
                                     <td>
                                         {% if user.username != 'admin' %}
-                                            <a href="{{ url_for('admin_panel', delete_type='user', id=user.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('Kullanıcıyı silmek istediğinize emin misiniz?')">Sil</a>
+                                            {# Kullanıcı sil butonu artık form içinde #}
+                                            <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
+                                                <input type="hidden" name="delete_type" value="user">
+                                                <input type="hidden" name="id" value="{{ user.id }}">
+                                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Kullanıcıyı silmek istediğinize emin misiniz?')"><i class="bi bi-trash"></i> Sil</button>
+                                            </form>
                                         {% endif %}
                                     </td>
                                 </tr>
