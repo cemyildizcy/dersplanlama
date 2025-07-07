@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from sqlalchemy import UniqueConstraint
 from werkzeug.utils import secure_filename # Güvenli dosya adı için
+from sqlalchemy import func # SQL fonksiyonları için (örn. count)
 
 # --- UYGULAMA VE VERİTABANI KURULUMU ---
 
@@ -160,14 +161,12 @@ def admin_panel():
 
     if request.method == "POST":
         action = request.form.get("action")
-        # Silme aksiyonları için de POST metodunu kullanacağız, bu yüzden onları action kontrolünün içine taşıyalım
-        delete_type = request.form.get("delete_type") # ARTIK request.form.get()
-        delete_id = request.form.get("id", type=int) # ARTIK request.form.get()
+        delete_type = request.form.get("delete_type")
+        delete_id = request.form.get("id", type=int)
         
-        # DEBUG: Silme isteği alındığında konsola yazdır
         print(f"DEBUG: Silme isteği alındı. Tür: {delete_type}, ID: {delete_id}, Admin mi: {session.get('is_admin')}, Ana Admin mi: {is_main_admin}")
 
-        if delete_type and delete_id: # Silme isteği ise
+        if delete_type and delete_id:
             item_to_delete = None
             try:
                 if delete_type == "ders": 
@@ -182,7 +181,6 @@ def admin_panel():
                     item_to_delete = Announcement.query.get_or_404(delete_id)
                 elif delete_type == "material": 
                     material_to_delete = Material.query.get_or_404(delete_id)
-                    # Dosyayı sunucudan sil
                     file_path = os.path.join(app.config['UPLOAD_FOLDER'], material_to_delete.filename)
                     print(f"DEBUG: Materyal dosyası silinmeye çalışılıyor: {file_path}")
                     if os.path.exists(file_path):
@@ -214,7 +212,6 @@ def admin_panel():
                 flash(f"Silme işlemi sırasında bir hata oluştu: {e}", "danger")
             return redirect(url_for('admin_panel'))
         
-        # Eğer bir silme isteği değilse, diğer POST aksiyonlarını kontrol et
         elif action == "add_user" and is_main_admin:
             username = request.form.get("new_username", "").strip()
             password = request.form.get("new_password", "").strip()
@@ -313,19 +310,42 @@ def admin_panel():
                 flash("Geçersiz dosya türü veya dosya yüklenemedi.", "danger")
             return redirect(url_for('admin_panel'))
         
-        # Eğer hiçbir action veya delete_type eşleşmezse
         flash("Geçersiz işlem veya eksik veri.", "danger")
         return redirect(url_for('admin_panel'))
 
     users = User.query.order_by(User.username).all()
     dersler = Ders.query.order_by(Ders.name).all()
     announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
+
+    # İstatistikleri hesapla - YENİ EKLENDİ
+    total_users_count = User.query.count()
+    active_users_count = User.query.filter(User.expire_date > datetime.utcnow()).count()
+
+    # Ders tamamlama istatistikleri
+    # Her ders için tamamlanan alt başlık sayısını bul
+    course_completion_counts = db.session.query(
+        Ders.name,
+        func.count(UserProgress.id)
+    ).join(Konu, Ders.id == Konu.ders_id)\
+     .join(AltBaslik, Konu.id == AltBaslik.konu_id)\
+     .join(UserProgress, AltBaslik.id == UserProgress.alt_baslik_id)\
+     .group_by(Ders.name)\
+     .order_by(func.count(UserProgress.id).desc())\
+     .all()
+
+    # Verileri Chart.js için uygun formata dönüştür
+    chart_labels = [row[0] for row in course_completion_counts]
+    chart_data = [row[1] for row in course_completion_counts]
     
     return render_template('admin.html', 
                            users=users, 
                            dersler=dersler, 
                            is_main_admin=is_main_admin,
-                           announcements=announcements)
+                           announcements=announcements,
+                           total_users_count=total_users_count, # Yeni
+                           active_users_count=active_users_count, # Yeni
+                           chart_labels=chart_labels, # Yeni
+                           chart_data=chart_data) # Yeni
 
 
 @app.route("/panel", methods=["GET"])

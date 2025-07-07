@@ -150,6 +150,56 @@
             border-radius: 10px;
             font-weight: 500;
         }
+        /* İstatistik Kartları Stili */
+        .stat-card {
+            background: linear-gradient(45deg, #e0f2f7 0%, #cce7f2 100%);
+            color: #0056b3;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            text-align: center;
+            height: 100%; /* Kartların aynı yükseklikte olmasını sağlar */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .stat-card .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: #007bff;
+        }
+        .stat-card .stat-label {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #0056b3;
+        }
+        /* Grafik Kartı Stili */
+        .chart-card {
+            background-color: #ffffff;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            height: 400px; /* Sabit bir yükseklik ver */
+            display: flex; /* İçeriği ortalamak için */
+            align-items: center; /* İçeriği ortalamak için */
+            justify-content: center; /* İçeriği ortalamak için */
+            position: relative; /* İçindeki canvas için bağlam oluştur */
+        }
+        /* Canvas'ı çevreleyen yeni div */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        /* Canvas'ın konteynerine tam oturmasını sağla */
+        .chart-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 100% !important;
+        }
     </style>
 </head>
 <body>
@@ -290,6 +340,32 @@
         </div>
         
         <div class="col-md-8">
+            {# İstatistik Kartları #}
+            <div class="row mb-4 g-3">
+                <div class="col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-value">{{ total_users_count }}</div>
+                        <div class="stat-label">Toplam Kullanıcı</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-value">{{ active_users_count }}</div>
+                        <div class="stat-label">Aktif Kullanıcı</div>
+                    </div>
+                </div>
+            </div>
+
+            {# Ders Tamamlama Grafiği #}
+            <div class="card shadow mb-4 chart-card">
+                <div class="card-body">
+                    <h5 class="mb-3">Ders Tamamlama İstatistikleri</h5>
+                    <div class="chart-container"> {# Yeni kapsayıcı div #}
+                        <canvas id="courseCompletionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
             <div class="card shadow">
                 <div class="card-body">
                     <h5 class="mb-3">Mevcut İçerik</h5>
@@ -300,7 +376,6 @@
                                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ ders.id }}">{{ ders.name }}</button>
                                 <div class="d-flex gap-2 me-2">
                                     <a href="{{ url_for('edit_ders', ders_id=ders.id) }}" class="btn btn-sm btn-secondary-edit"><i class="bi bi-pencil-square"></i> Düzenle</a>
-                                    {# Silme butonu artık form içinde #}
                                     <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
                                         <input type="hidden" name="delete_type" value="ders">
                                         <input type="hidden" name="id" value="{{ ders.id }}">
@@ -317,7 +392,6 @@
                                             </div>
                                             <div class="d-flex gap-2">
                                                 <a href="{{ url_for('edit_konu', konu_id=konu.id) }}" class="btn btn-sm btn-secondary-edit"><i class="bi bi-pencil-square"></i> Düzenle</a>
-                                                {# Silme butonu artık form içinde #}
                                                 <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
                                                     <input type="hidden" name="delete_type" value="konu">
                                                     <input type="hidden" name="id" value="{{ konu.id }}">
@@ -332,7 +406,6 @@
                                                     </div>
                                                     <div class="d-flex gap-2">
                                                         <a href="{{ url_for('edit_alt_baslik', alt_baslik_id=alt_baslik.id) }}" class="btn btn-sm btn-secondary-edit"><i class="bi bi-pencil-square"></i> Düzenle</a>
-                                                        {# Silme butonu artık form içinde #}
                                                         <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
                                                             <input type="hidden" name="delete_type" value="alt_baslik">
                                                             <input type="hidden" name="id" value="{{ alt_baslik.id }}">
@@ -346,7 +419,6 @@
                                                                     <div>
                                                                         <i class="bi bi-file-earmark-arrow-down-fill me-1"></i> {{ material.original_filename }} 
                                                                     </div>
-                                                                    {# Materyal sil butonu artık form içinde #}
                                                                     <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
                                                                         <input type="hidden" name="delete_type" value="material">
                                                                         <input type="hidden" name="id" value="{{ material.id }}">
@@ -388,7 +460,6 @@
                                         <small class="text-muted">({{ announcement.created_at.strftime('%Y-%m-%d %H:%M') }})</small><br>
                                         <p class="mb-0">{{ announcement.content }}</p>
                                     </div>
-                                    {# Duyuru sil butonu artık form içinde #}
                                     <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
                                         <input type="hidden" name="delete_type" value="announcement">
                                         <input type="hidden" name="id" value="{{ announcement.id }}">
@@ -430,7 +501,6 @@
                                     <td>{{ user.expire_date.strftime('%Y-%m-%d') if user.expire_date else '-' }}</td>
                                     <td>
                                         {% if user.username != 'admin' %}
-                                            {# Kullanıcı sil butonu artık form içinde #}
                                             <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
                                                 <input type="hidden" name="delete_type" value="user">
                                                 <input type="hidden" name="id" value="{{ user.id }}">
@@ -451,5 +521,67 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script> {# Chart.js kütüphanesi #}
+
+<script>
+    // Ders Tamamlama Grafiği
+    var ctx = document.getElementById('courseCompletionChart').getContext('2d');
+    var courseCompletionChart = new Chart(ctx, {
+        type: 'bar', // Çubuk grafik
+        data: {
+            labels: {{ chart_labels | tojson }}, // Flask'tan gelen ders isimleri
+            datasets: [{
+                label: 'Tamamlanan Alt Başlık Sayısı',
+                data: {{ chart_data | tojson }}, // Flask'tan gelen tamamlanma sayıları
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(153, 102, 255, 0.7)',
+                    'rgba(255, 159, 64, 0.7)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false, // Konteyner boyutuna uyum sağlaması için
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Tamamlanma Sayısı'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Ders Adı'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false // Efsaneyi gizle
+                },
+                title: {
+                    display: true,
+                    text: 'En Çok Tamamlanan Dersler'
+                }
+            }
+        }
+    });
+</script>
+
 </body>
 </html>
