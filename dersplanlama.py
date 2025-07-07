@@ -10,6 +10,7 @@ from sqlalchemy import UniqueConstraint
 from werkzeug.utils import secure_filename # Güvenli dosya adı için
 from sqlalchemy import func # SQL fonksiyonları için (örn. count)
 import requests # API çağrıları için
+import random # Rastgele seçim için
 
 # --- UYGULAMA VE VERİTABANI KURULUMU ---
 
@@ -50,7 +51,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     expire_date = db.Column(db.DateTime)
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade="all, delete-orphan")
-    private_notes = db.relationship('PrivateNote', backref='user', lazy=True, cascade="all, delete-orphan") # Yeni ilişki
+    private_notes = db.relationship('PrivateNote', backref='user', lazy=True, cascade="all, delete-orphan")
 
 
 class Ders(db.Model):
@@ -72,7 +73,7 @@ class AltBaslik(db.Model):
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
-    private_notes = db.relationship('PrivateNote', backref='alt_baslik', lazy=True, cascade="all, delete-orphan") # Yeni ilişki
+    private_notes = db.relationship('PrivateNote', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
 
 class UserProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -105,11 +106,11 @@ class Material(db.Model):
     def __repr__(self):
         return f'<Material {self.original_filename}>'
 
-class PrivateNote(db.Model): # Yeni PrivateNote Modeli
+class PrivateNote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
-    note_content = db.Column(db.Text, nullable=True) # Not içeriği
+    note_content = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -398,13 +399,50 @@ def user_panel():
         progress_records = UserProgress.query.filter_by(user_id=user.id).all()
         completed_alt_baslik_ids = {p.alt_baslik_id for p in progress_records}
 
-    # Kullanıcının mevcut alt başlıklar için özel notlarını çek
     private_notes_map = {}
     if user and selected_konu:
         for alt_baslik in selected_konu.alt_basliklar:
             note = PrivateNote.query.filter_by(user_id=user.id, alt_baslik_id=alt_baslik.id).first()
             if note:
                 private_notes_map[alt_baslik.id] = note.note_content
+
+    # Kişiselleştirilmiş İçerik Önerileri - YENİ EKLENDİ
+    recommended_alt_basliks = []
+    if user:
+        # Tüm alt başlıkları al
+        all_alt_basliks = AltBaslik.query.all()
+        
+        # Kullanıcının tamamlamadığı alt başlıkları filtrele
+        uncompleted_alt_basliks = [
+            ab for ab in all_alt_basliks 
+            if ab.id not in completed_alt_baslik_ids
+        ]
+
+        if selected_konu:
+            # Eğer bir konu seçiliyse, o konudaki bir sonraki tamamlanmamış alt başlığı bulmaya çalış
+            found_next = False
+            for ab in selected_konu.alt_basliklar:
+                if ab.id not in completed_alt_baslik_ids:
+                    recommended_alt_basliks.append(ab)
+                    found_next = True
+                    break # Sadece ilkini öner
+            
+            # Eğer mevcut konuda tamamlanmamış başka öğe yoksa veya hiç öğe yoksa, genelden öner
+            if not found_next and uncompleted_alt_basliks:
+                # Rastgele 3 tane öner
+                recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, min(len(uncompleted_alt_basliks), 3)))
+        elif uncompleted_alt_basliks:
+            # Hiç ders/konu seçili değilse, rastgele 3 tane öner
+            recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, min(len(uncompleted_alt_basliks), 3)))
+    
+    # Önerilen alt başlıkların benzersiz olduğundan emin ol (aynı alt başlık birden fazla kez gelmesin)
+    # ve sıralamayı korumak için listeye çevir
+    unique_recommended_alt_basliks = []
+    seen_ids = set()
+    for ab in recommended_alt_basliks:
+        if ab.id not in seen_ids:
+            unique_recommended_alt_basliks.append(ab)
+            seen_ids.add(ab.id)
 
 
     completion_percentage = 0
@@ -427,7 +465,8 @@ def user_panel():
                            completed_alt_baslik_ids=completed_alt_baslik_ids,
                            completion_percentage=completion_percentage,
                            active_announcements=active_announcements,
-                           private_notes_map=private_notes_map) # Yeni: Notları template'e gönder
+                           private_notes_map=private_notes_map,
+                           recommended_alt_basliks=unique_recommended_alt_basliks) # Yeni: Önerileri template'e gönder
 
 
 @app.route("/mark_completed", methods=["POST"])
@@ -614,7 +653,7 @@ def ask_ai():
         return jsonify({"error": "Yapay zeka asistanı yapılandırma hatası: API anahtarı eksik."}), 500
 
     chat_history = []
-    chat_history.append({"role": "user", "parts": [{"text": user_question}]}) # Python listesine ekleme düzeltildi
+    chat_history.append({"role": "user", "parts": [{"text": user_question}]})
     
     payload = {
         "contents": chat_history,
@@ -659,29 +698,27 @@ def save_note():
         flash("Geçersiz istek.", "danger")
         return redirect(url_for('user_panel'))
     
-    # Mevcut notu bul veya yeni bir tane oluştur
     private_note = PrivateNote.query.filter_by(user_id=user_id, alt_baslik_id=alt_baslik_id).first()
 
     if private_note:
-        if note_content: # Not içeriği varsa güncelle
+        if note_content:
             private_note.note_content = note_content
             private_note.updated_at = datetime.utcnow()
             db.session.commit()
             flash("Notunuz başarıyla güncellendi.", "success")
-        else: # Not içeriği boşsa sil
+        else:
             db.session.delete(private_note)
             db.session.commit()
             flash("Notunuz başarıyla silindi.", "info")
     else:
-        if note_content: # Yeni not oluştur
+        if note_content:
             new_note = PrivateNote(user_id=user_id, alt_baslik_id=alt_baslik_id, note_content=note_content)
             db.session.add(new_note)
             db.session.commit()
             flash("Notunuz başarıyla kaydedildi.", "success")
-        else: # Boş not kaydetmeye çalışıyorsa
+        else:
             flash("Boş not kaydedilemez.", "warning")
     
-    # Kullanıcının ders seçimini koruyarak paneline geri yönlendir
     selected_ders_id = request.form.get("selected_ders_id", type=int)
     selected_konu_id = request.form.get("selected_konu_id", type=int)
     return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))

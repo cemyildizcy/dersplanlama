@@ -295,6 +295,32 @@
             border-color: #bd2130;
         }
 
+        /* Önerilen İçerikler Stili */
+        .recommendation-card {
+            background-color: #e6f7ff; /* Açık mavi */
+            border-color: #b3e0ff;
+            color: #0056b3;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+        }
+        .recommendation-card .card-title {
+            color: #0056b3;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .recommendation-card .list-group-item {
+            background-color: #d9edf7; /* Daha koyu mavi */
+            border-color: #a6d9ee;
+            color: #003366;
+            font-weight: 500;
+            transition: background-color 0.3s ease;
+        }
+        .recommendation-card .list-group-item:hover {
+            background-color: #c0e6f4;
+        }
+
 
         /* Mobil uyumluluk */
         @media (max-width: 768px) {
@@ -390,6 +416,24 @@
         </div>
     </div>
 
+    {# Önerilen İçerikler Kartı - YENİ EKLENDİ #}
+    {% if recommended_alt_basliks %}
+        <div class="recommendation-card mb-4">
+            <h5 class="card-title"><i class="bi bi-lightbulb-fill me-2"></i>Sizin İçin Önerilen İçerikler</h5>
+            <ul class="list-group list-group-flush">
+                {% for rec_ab in recommended_alt_basliks %}
+                    <a href="{{ url_for('user_panel', ders_id=rec_ab.konu.ders_id, konu_id=rec_ab.konu_id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ rec_ab.name }}</strong>
+                            <small class="text-muted d-block">{{ rec_ab.konu.ders.name }} / {{ rec_ab.konu.name }}</small>
+                        </div>
+                        <i class="bi bi-arrow-right-circle-fill"></i>
+                    </a>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
 
     <div class="row g-4">
         <div class="col-lg-4 col-md-12">
@@ -478,7 +522,7 @@
                                     </form>
                                 </div>
                             </li>
-                            {# Özel Notlar Bölümü - YENİ EKLENDİ #}
+                            {# Özel Notlar Bölümü #}
                             <li class="list-group-item private-note-section">
                                 <h6 class="mb-2" style="color: var(--primary-color); font-weight: 600;"><i class="bi bi-journal-text me-1"></i> Özel Notlarım</h6>
                                 <form action="{{ url_for('save_note') }}" method="post">
@@ -488,7 +532,7 @@
                                     <textarea class="form-control" name="note_content" rows="3" placeholder="Bu alt başlık için özel notlarınızı buraya yazın...">{{ private_notes_map.get(alt_baslik.id, '') }}</textarea>
                                     <div class="d-flex justify-content-end gap-2 mt-2">
                                         <button type="submit" class="btn btn-sm btn-note-save">Notu Kaydet</button>
-                                        {% if private_notes_map.get(alt_baslik.id) %} {# Not varsa sil butonu göster #}
+                                        {% if private_notes_map.get(alt_baslik.id) %}
                                             <button type="submit" class="btn btn-sm btn-note-delete" name="note_content" value="" onclick="return confirm('Notunuzu silmek istediğinize emin misiniz?')">Notu Sil</button>
                                         {% endif %}
                                     </div>
@@ -521,7 +565,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const aiResponseArea = document.getElementById('aiResponseArea');
     const aiLoadingSpinner = document.getElementById('aiLoadingSpinner');
 
-    if (askAiButton) { // AI asistanı butonu varsa dinleyici ekle
+    if (askAiButton) {
         askAiButton.addEventListener('click', async function() {
             const question = aiQuestionInput.value.trim();
             if (!question) {
@@ -529,9 +573,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            aiResponseArea.textContent = ""; // Önceki cevabı temizle
-            aiLoadingSpinner.style.display = 'block'; // Yükleniyor spinner'ını göster
-            askAiButton.disabled = true; // Butonu devre dışı bırak
+            aiResponseArea.textContent = "";
+            aiLoadingSpinner.style.display = 'block';
+            askAiButton.disabled = true;
 
             try {
                 const response = await fetch('/ask_ai', {
@@ -553,8 +597,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Yapay zeka isteği sırasında hata:', error);
                 aiResponseArea.textContent = "İstek gönderilirken bir hata oluştu. Lütfen ağ bağlantınızı kontrol edin.";
             } finally {
-                aiLoadingSpinner.style.display = 'none'; // Yükleniyor spinner'ını gizle
-                askAiButton.disabled = false; // Butonu tekrar etkinleştir
+                aiLoadingSpinner.style.display = 'none';
+                askAiButton.disabled = false;
             }
         });
     }
