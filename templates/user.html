@@ -264,6 +264,37 @@
             color: var(--primary-color);
         }
 
+        /* Özel Notlar Stili */
+        .private-note-section {
+            background-color: #f8f9fa; /* Açık gri */
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 1rem;
+            border: 1px solid #e9ecef;
+        }
+        .private-note-section textarea {
+            min-height: 80px;
+            margin-bottom: 0.5rem;
+        }
+        .btn-note-save {
+            background-color: #20c997; /* Turkuaz yeşili */
+            border-color: #20c997;
+            color: white;
+        }
+        .btn-note-save:hover {
+            background-color: #17a67c;
+            border-color: #159a72;
+        }
+        .btn-note-delete {
+            background-color: #dc3545; /* Kırmızı */
+            border-color: #dc3545;
+            color: white;
+        }
+        .btn-note-delete:hover {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+
 
         /* Mobil uyumluluk */
         @media (max-width: 768px) {
@@ -339,7 +370,7 @@
         </div>
     {% endif %}
 
-    {# Yapay Zeka Asistanı Kartı - YENİ EKLENDİ #}
+    {# Yapay Zeka Asistanı Kartı #}
     <div class="ai-assistant-card mb-4">
         <h5 class="card-title"><i class="bi bi-robot me-2"></i>Yapay Zeka Asistanı</h5>
         <div class="mb-3">
@@ -447,6 +478,22 @@
                                     </form>
                                 </div>
                             </li>
+                            {# Özel Notlar Bölümü - YENİ EKLENDİ #}
+                            <li class="list-group-item private-note-section">
+                                <h6 class="mb-2" style="color: var(--primary-color); font-weight: 600;"><i class="bi bi-journal-text me-1"></i> Özel Notlarım</h6>
+                                <form action="{{ url_for('save_note') }}" method="post">
+                                    <input type="hidden" name="alt_baslik_id" value="{{ alt_baslik.id }}">
+                                    <input type="hidden" name="selected_ders_id" value="{{ selected_ders.id if selected_ders else '' }}">
+                                    <input type="hidden" name="selected_konu_id" value="{{ selected_konu.id if selected_konu else '' }}">
+                                    <textarea class="form-control" name="note_content" rows="3" placeholder="Bu alt başlık için özel notlarınızı buraya yazın...">{{ private_notes_map.get(alt_baslik.id, '') }}</textarea>
+                                    <div class="d-flex justify-content-end gap-2 mt-2">
+                                        <button type="submit" class="btn btn-sm btn-note-save">Notu Kaydet</button>
+                                        {% if private_notes_map.get(alt_baslik.id) %} {# Not varsa sil butonu göster #}
+                                            <button type="submit" class="btn btn-sm btn-note-delete" name="note_content" value="" onclick="return confirm('Notunuzu silmek istediğinize emin misiniz?')">Notu Sil</button>
+                                        {% endif %}
+                                    </div>
+                                </form>
+                            </li>
                         {% else %}
                             <li class="list-group-item text-muted">Bu konu için henüz alt başlık eklenmemiş.</li>
                         {% endfor %}
@@ -474,41 +521,43 @@ document.addEventListener('DOMContentLoaded', function() {
     const aiResponseArea = document.getElementById('aiResponseArea');
     const aiLoadingSpinner = document.getElementById('aiLoadingSpinner');
 
-    askAiButton.addEventListener('click', async function() {
-        const question = aiQuestionInput.value.trim();
-        if (!question) {
-            aiResponseArea.textContent = "Lütfen bir soru yazın.";
-            return;
-        }
-
-        aiResponseArea.textContent = ""; // Önceki cevabı temizle
-        aiLoadingSpinner.style.display = 'block'; // Yükleniyor spinner'ını göster
-        askAiButton.disabled = true; // Butonu devre dışı bırak
-
-        try {
-            const response = await fetch('/ask_ai', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ question: question })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                aiResponseArea.textContent = data.answer;
-            } else {
-                aiResponseArea.textContent = "Hata: " + (data.error || "Yapay zeka cevabı alınamadı.");
+    if (askAiButton) { // AI asistanı butonu varsa dinleyici ekle
+        askAiButton.addEventListener('click', async function() {
+            const question = aiQuestionInput.value.trim();
+            if (!question) {
+                aiResponseArea.textContent = "Lütfen bir soru yazın.";
+                return;
             }
-        } catch (error) {
-            console.error('Yapay zeka isteği sırasında hata:', error);
-            aiResponseArea.textContent = "İstek gönderilirken bir hata oluştu. Lütfen ağ bağlantınızı kontrol edin.";
-        } finally {
-            aiLoadingSpinner.style.display = 'none'; // Yükleniyor spinner'ını gizle
-            askAiButton.disabled = false; // Butonu tekrar etkinleştir
-        }
-    });
+
+            aiResponseArea.textContent = ""; // Önceki cevabı temizle
+            aiLoadingSpinner.style.display = 'block'; // Yükleniyor spinner'ını göster
+            askAiButton.disabled = true; // Butonu devre dışı bırak
+
+            try {
+                const response = await fetch('/ask_ai', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question: question })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    aiResponseArea.textContent = data.answer;
+                } else {
+                    aiResponseArea.textContent = "Hata: " + (data.error || "Yapay zeka cevabı alınamadı.");
+                }
+            } catch (error) {
+                console.error('Yapay zeka isteği sırasında hata:', error);
+                aiResponseArea.textContent = "İstek gönderilirken bir hata oluştu. Lütfen ağ bağlantınızı kontrol edin.";
+            } finally {
+                aiLoadingSpinner.style.display = 'none'; // Yükleniyor spinner'ını gizle
+                askAiButton.disabled = false; // Butonu tekrar etkinleştir
+            }
+        });
+    }
 });
 </script>
 </body>

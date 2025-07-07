@@ -50,6 +50,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     expire_date = db.Column(db.DateTime)
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade="all, delete-orphan")
+    private_notes = db.relationship('PrivateNote', backref='user', lazy=True, cascade="all, delete-orphan") # Yeni ilişki
 
 
 class Ders(db.Model):
@@ -71,6 +72,7 @@ class AltBaslik(db.Model):
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
+    private_notes = db.relationship('PrivateNote', backref='alt_baslik', lazy=True, cascade="all, delete-orphan") # Yeni ilişki
 
 class UserProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -102,6 +104,20 @@ class Material(db.Model):
 
     def __repr__(self):
         return f'<Material {self.original_filename}>'
+
+class PrivateNote(db.Model): # Yeni PrivateNote Modeli
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
+    note_content = db.Column(db.Text, nullable=True) # Not içeriği
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('user_id', 'alt_baslik_id', name='_user_alt_baslik_note_uc'),)
+
+    def __repr__(self):
+        return f'<PrivateNote UserID: {self.user_id}, AltBaslikID: {self.alt_baslik_id}>'
+
 
 # --- YARDIMCI FONKSİYONLAR (Devamı) ---
 def login_required(f):
@@ -382,6 +398,15 @@ def user_panel():
         progress_records = UserProgress.query.filter_by(user_id=user.id).all()
         completed_alt_baslik_ids = {p.alt_baslik_id for p in progress_records}
 
+    # Kullanıcının mevcut alt başlıklar için özel notlarını çek
+    private_notes_map = {}
+    if user and selected_konu:
+        for alt_baslik in selected_konu.alt_basliklar:
+            note = PrivateNote.query.filter_by(user_id=user.id, alt_baslik_id=alt_baslik.id).first()
+            if note:
+                private_notes_map[alt_baslik.id] = note.note_content
+
+
     completion_percentage = 0
     if selected_konu:
         total_alt_basliks_in_konu = len(selected_konu.alt_basliklar)
@@ -401,7 +426,8 @@ def user_panel():
                            kalan_gun=kalan_gun,
                            completed_alt_baslik_ids=completed_alt_baslik_ids,
                            completion_percentage=completion_percentage,
-                           active_announcements=active_announcements)
+                           active_announcements=active_announcements,
+                           private_notes_map=private_notes_map) # Yeni: Notları template'e gönder
 
 
 @app.route("/mark_completed", methods=["POST"])
@@ -588,9 +614,7 @@ def ask_ai():
         return jsonify({"error": "Yapay zeka asistanı yapılandırma hatası: API anahtarı eksik."}), 500
 
     chat_history = []
-    # Python'da listeye eleman eklemek için .append() kullanılır.
-    # user_question, kullanıcının sorduğu sorudur.
-    chat_history.append({"role": "user", "parts": [{"text": user_question}]}) 
+    chat_history.append({"role": "user", "parts": [{"text": user_question}]}) # Python listesine ekleme düzeltildi
     
     payload = {
         "contents": chat_history,
@@ -621,6 +645,46 @@ def ask_ai():
     except Exception as e:
         print(f"HATA: Beklenmeyen bir hata oluştu: {e}")
         return jsonify({"error": f"Beklenmeyen bir hata oluştu: {e}"}), 500
+
+
+# --- Not Kaydetme/Silme Rotları ---
+@app.route("/save_note", methods=["POST"])
+@login_required
+def save_note():
+    alt_baslik_id = request.form.get("alt_baslik_id", type=int)
+    note_content = request.form.get("note_content", "").strip()
+    user_id = session.get("user_id")
+
+    if not alt_baslik_id or not user_id:
+        flash("Geçersiz istek.", "danger")
+        return redirect(url_for('user_panel'))
+    
+    # Mevcut notu bul veya yeni bir tane oluştur
+    private_note = PrivateNote.query.filter_by(user_id=user_id, alt_baslik_id=alt_baslik_id).first()
+
+    if private_note:
+        if note_content: # Not içeriği varsa güncelle
+            private_note.note_content = note_content
+            private_note.updated_at = datetime.utcnow()
+            db.session.commit()
+            flash("Notunuz başarıyla güncellendi.", "success")
+        else: # Not içeriği boşsa sil
+            db.session.delete(private_note)
+            db.session.commit()
+            flash("Notunuz başarıyla silindi.", "info")
+    else:
+        if note_content: # Yeni not oluştur
+            new_note = PrivateNote(user_id=user_id, alt_baslik_id=alt_baslik_id, note_content=note_content)
+            db.session.add(new_note)
+            db.session.commit()
+            flash("Notunuz başarıyla kaydedildi.", "success")
+        else: # Boş not kaydetmeye çalışıyorsa
+            flash("Boş not kaydedilemez.", "warning")
+    
+    # Kullanıcının ders seçimini koruyarak paneline geri yönlendir
+    selected_ders_id = request.form.get("selected_ders_id", type=int)
+    selected_konu_id = request.form.get("selected_konu_id", type=int)
+    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
 
 
 # Lokalde çalıştırmak için `if __name__` bloğu aynı kalıyor
