@@ -2,6 +2,7 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate  # YENİ EKLENDİ
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from functools import wraps
@@ -11,22 +12,20 @@ from functools import wraps
 app = Flask(__name__)
 
 # Güvenli konfigürasyon: Ayarları ortam değişkenlerinden alıyoruz
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bu-sadece-lokalde-calisirken-kullanilacak-gecici-anahtar')
-# Render'daki DATABASE_URL'yi kullan, yoksa lokaldeki sqlite dosyasını kullan
-database_url = os.environ.get('DATABASE_URL')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'varsayilan_cok_gizli_bir_anahtar_12345')
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///dersplanlama.db')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///dersplanlama.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# ...
-# Veritabanı nesnesini oluşturuyoruz
+# Veritabanı nesnesini ve Migrate nesnesini oluşturuyoruz
 db = SQLAlchemy(app)
+migrate = Migrate(app, db) # YENİ EKLENDİ
 
-# --- VERİTABANI MODELLERİ ---
-# Kullanıcı modelini tanımlıyoruz
+# --- VERİTABANI MODELLERİ (Aynı kalıyor) ---
+
 class User(db.Model):
-
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(256), nullable=False)
@@ -51,8 +50,8 @@ class AltBaslik(db.Model):
     notlar = db.Column(db.Text)
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
 
-# --- YARDIMCI FONKSİYONLAR ---
 
+# --- YARDIMCI FONKSİYONLAR (Aynı kalıyor) ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -70,10 +69,12 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- ROTALAR (SAYFALAR) ---
 
+# --- ROTALAR (SAYFALAR) (Aynı kalıyor) ---
+# (Tüm @app.route fonksiyonların burada...)
 @app.route("/", methods=["GET", "POST"])
 def login():
+    # ... (içeriği aynı)
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
@@ -95,6 +96,7 @@ def login():
             
     return render_template('login.html')
 
+# ... (Diğer tüm @app.route fonksiyonları aynı kalacak şekilde buraya gelecek)
 @app.route("/logout")
 def logout():
     session.clear()
@@ -108,12 +110,10 @@ def logout():
 def admin_panel():
     is_main_admin = session.get("username") == "admin"
 
-    # --- FORM GÖNDERİLDİĞİNDE ÇALIŞACAK KISIM ---
     if request.method == "POST":
         action = request.form.get("action")
-
-        # Yeni Kullanıcı Ekleme
         if action == "add_user" and is_main_admin:
+            #... (Tüm POST mantığı aynı)
             username = request.form.get("new_username", "").strip()
             password = request.form.get("new_password", "").strip()
             access_days_str = request.form.get("access_days", "").strip()
@@ -133,8 +133,7 @@ def admin_panel():
                 db.session.commit()
                 flash(f"'{username}' kullanıcısı başarıyla eklendi.", "success")
             return redirect(url_for('admin_panel'))
-
-        # Yeni Ders Ekleme
+        #... Diğer action'lar
         elif action == "add_ders":
             ders_name = request.form.get("yeni_ders", "").strip()
             if ders_name and not Ders.query.filter_by(name=ders_name).first():
@@ -146,7 +145,6 @@ def admin_panel():
                 flash("Ders adı boş olamaz veya bu ders zaten mevcut.", "danger")
             return redirect(url_for('admin_panel'))
         
-        # Yeni Konu Ekleme
         elif action == "add_konu":
             konu_name = request.form.get("yeni_konu", "").strip()
             ders_id = request.form.get("ders_sec_konu", type=int)
@@ -159,7 +157,6 @@ def admin_panel():
                 flash("Konu adı veya ders seçimi boş olamaz.", "danger")
             return redirect(url_for('admin_panel'))
             
-        # Yeni Alt Başlık Ekleme
         elif action == "add_alt_baslik":
             alt_baslik_name = request.form.get("alt_baslik", "").strip()
             konu_id = request.form.get("konu_sec_alt", type=int)
@@ -173,10 +170,7 @@ def admin_panel():
             else:
                 flash("Alt başlık veya konu seçimi boş olamaz.", "danger")
             return redirect(url_for('admin_panel'))
-
-    # --- SAYFA İLK YÜKLENDİĞİNDE (GET İSTEĞİ) ÇALIŞACAK KISIM ---
     
-    # Silme işlemleri
     delete_type = request.args.get("delete_type")
     delete_id = request.args.get("id", type=int)
     if delete_type and delete_id:
@@ -195,11 +189,11 @@ def admin_panel():
                 flash(f"{delete_type.capitalize()} başarıyla silindi.", "success")
         return redirect(url_for('admin_panel'))
 
-    # Şablona gönderilecek verileri hazırla
     users = User.query.order_by(User.username).all()
     dersler = Ders.query.order_by(Ders.name).all()
     
     return render_template('admin.html', users=users, dersler=dersler, is_main_admin=is_main_admin)
+
 
 @app.route("/panel", methods=["GET"])
 @login_required
@@ -212,7 +206,6 @@ def user_panel():
     selected_ders = Ders.query.get(selected_ders_id) if selected_ders_id else None
     selected_konu = Konu.query.get(selected_konu_id) if selected_konu_id else None
 
-    # Kullanıcının kalan gününü hesapla
     user = User.query.get(session['user_id'])
     kalan_gun = None
     if user.expire_date:
@@ -222,21 +215,7 @@ def user_panel():
     return render_template('user.html', dersler=dersler, selected_ders=selected_ders, selected_konu=selected_konu, kalan_gun=kalan_gun)
 
 
-# Bu blok sadece bilgisayarda `python app.py` komutuyla çalıştırıldığında devreye girer.
-# Render bu bloğu görmez.
-# Bu blok sadece bilgisayarda `python app.py` komutuyla çalıştırıldığında devreye girer.
-# Render bu bloğu görmez.
-if __name__ == '__main__':
-    with app.app_context():
-        # Lokal veritabanı için tabloları kontrol et, yoksa oluştur.
-        db.create_all()
 
-        # Lokal veritabanında 'admin' kullanıcısı yoksa, test için oluştur.
-        if not User.query.filter_by(username='admin').first():
-            hashed_password = generate_password_hash('Cemyildiz10.')
-            admin_user = User(username='admin', password=hashed_password, is_admin=True)
-            db.session.add(admin_user)
-            db.session.commit()
-            print("--- Lokal veritabanı için varsayılan 'admin' kullanıcısı oluşturuldu. ---")
-            
+# Lokalde çalıştırmak için `if __name__` bloğu aynı kalıyor
+if __name__ == '__main__':
     app.run(debug=True)
