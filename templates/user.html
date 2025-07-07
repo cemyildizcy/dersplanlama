@@ -316,9 +316,15 @@
             color: #003366;
             font-weight: 500;
             transition: background-color 0.3s ease;
+            border-radius: 8px !important; /* Köşeleri yuvarla */
+            margin-bottom: 5px; /* Aralarında boşluk bırak */
         }
         .recommendation-card .list-group-item:hover {
             background-color: #c0e6f4;
+            transform: translateY(-2px); /* Hafif yukarı kaydırma efekti */
+        }
+        .recommendation-card .list-group-item:last-child {
+            margin-bottom: 0;
         }
 
 
@@ -416,7 +422,7 @@
         </div>
     </div>
 
-    {# Önerilen İçerikler Kartı - YENİ EKLENDİ #}
+    {# Önerilen İçerikler Kartı #}
     {% if recommended_alt_basliks %}
         <div class="recommendation-card mb-4">
             <h5 class="card-title"><i class="bi bi-lightbulb-fill me-2"></i>Sizin İçin Önerilen İçerikler</h5>

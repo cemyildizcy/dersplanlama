@@ -406,34 +406,50 @@ def user_panel():
             if note:
                 private_notes_map[alt_baslik.id] = note.note_content
 
-    # Kişiselleştirilmiş İçerik Önerileri - YENİ EKLENDİ
+    # Kişiselleştirilmiş İçerik Önerileri
     recommended_alt_basliks = []
     if user:
         # Tüm alt başlıkları al
         all_alt_basliks = AltBaslik.query.all()
+        print(f"DEBUG: Toplam alt başlık sayısı: {len(all_alt_basliks)}") # DEBUG
         
         # Kullanıcının tamamlamadığı alt başlıkları filtrele
         uncompleted_alt_basliks = [
             ab for ab in all_alt_basliks 
             if ab.id not in completed_alt_baslik_ids
         ]
+        print(f"DEBUG: Tamamlanmamış alt başlık sayısı: {len(uncompleted_alt_basliks)}") # DEBUG
 
         if selected_konu:
+            print(f"DEBUG: Seçili konu: {selected_konu.name}") # DEBUG
             # Eğer bir konu seçiliyse, o konudaki bir sonraki tamamlanmamış alt başlığı bulmaya çalış
-            found_next = False
+            found_next_in_selected_konu = False
             for ab in selected_konu.alt_basliklar:
                 if ab.id not in completed_alt_baslik_ids:
                     recommended_alt_basliks.append(ab)
-                    found_next = True
+                    found_next_in_selected_konu = True
+                    print(f"DEBUG: Seçili konuda ilk tamamlanmamış öneri: {ab.name}") # DEBUG
                     break # Sadece ilkini öner
             
             # Eğer mevcut konuda tamamlanmamış başka öğe yoksa veya hiç öğe yoksa, genelden öner
-            if not found_next and uncompleted_alt_basliks:
+            if not found_next_in_selected_konu and uncompleted_alt_basliks:
                 # Rastgele 3 tane öner
-                recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, min(len(uncompleted_alt_basliks), 3)))
+                # random.sample, eğer popülasyon (uncompleted_alt_basliks) istenen k'dan küçükse hata verir.
+                # Bu yüzden min(len(uncompleted_alt_basliks), 3) kullanarak güvenli hale getiriyoruz.
+                num_to_sample = min(len(uncompleted_alt_basliks), 3)
+                if num_to_sample > 0: # Sadece örnek alınacak eleman varsa
+                    recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
+                    print(f"DEBUG: Seçili konuda başka yok, genelden rastgele {num_to_sample} öneri eklendi.") # DEBUG
         elif uncompleted_alt_basliks:
-            # Hiç ders/konu seçili değilse, rastgele 3 tane öner
-            recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, min(len(uncompleted_alt_basliks), 3)))
+            # Hiç ders/konu seçili değilse, genelden rastgele 3 tane öner
+            num_to_sample = min(len(uncompleted_alt_basliks), 3)
+            if num_to_sample > 0: # Sadece örnek alınacak eleman varsa
+                recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
+                print(f"DEBUG: Hiç konu seçili değil, genelden rastgele {num_to_sample} öneri eklendi.") # DEBUG
+        else:
+            print("DEBUG: Tamamlanmamış alt başlık bulunamadı, öneri yok.") # DEBUG
+    else:
+        print("DEBUG: Kullanıcı oturumu yok veya tamamlanmamış alt başlık bulunamadı.") # DEBUG
     
     # Önerilen alt başlıkların benzersiz olduğundan emin ol (aynı alt başlık birden fazla kez gelmesin)
     # ve sıralamayı korumak için listeye çevir
@@ -443,6 +459,7 @@ def user_panel():
         if ab.id not in seen_ids:
             unique_recommended_alt_basliks.append(ab)
             seen_ids.add(ab.id)
+    print(f"DEBUG: Son önerilen alt başlıklar ({len(unique_recommended_alt_basliks)} adet): {[ab.name for ab in unique_recommended_alt_basliks]}") # DEBUG
 
 
     completion_percentage = 0
@@ -466,7 +483,7 @@ def user_panel():
                            completion_percentage=completion_percentage,
                            active_announcements=active_announcements,
                            private_notes_map=private_notes_map,
-                           recommended_alt_basliks=unique_recommended_alt_basliks) # Yeni: Önerileri template'e gönder
+                           recommended_alt_basliks=unique_recommended_alt_basliks)
 
 
 @app.route("/mark_completed", methods=["POST"])
