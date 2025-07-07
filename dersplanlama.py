@@ -222,11 +222,26 @@ def admin_panel():
             elif User.query.filter_by(username=username).first():
                 flash("Bu kullanıcı adı zaten mevcut.", "danger")
             else:
-                hashed_password = generate_password_hash(password)
                 expire_date = None
+                # access_days_str'yi int'e çevirmeden önce kontrol et
+                # Çok büyük bir sayı veya negatif sayı girilmesini engelle
                 if access_days_str.isdigit():
-                    expire_date = datetime.utcnow() + timedelta(days=int(access_days_str))
+                    days_to_add = int(access_days_str)
+                    # Makul bir üst limit belirleyelim, örneğin 36500 gün (yaklaşık 100 yıl)
+                    if days_to_add > 0 and days_to_add <= 36500: # YENİ KONTROL
+                        expire_date = datetime.utcnow() + timedelta(days=days_to_add)
+                    elif days_to_add <= 0: # Negatif veya 0 gün girilirse
+                        flash("Erişim süresi pozitif bir sayı olmalıdır.", "danger")
+                        return redirect(url_for('admin_panel'))
+                    else: # Çok büyük bir sayı girilirse
+                        flash("Erişim süresi çok büyük. Lütfen daha küçük bir değer girin.", "danger")
+                        return redirect(url_for('admin_panel'))
+                elif access_days_str: # Sayısal olmayan ama boş olmayan bir değer girilirse
+                    flash("Erişim süresi sadece sayı içermelidir.", "danger")
+                    return redirect(url_for('admin_panel'))
+                # Eğer access_days_str boşsa, expire_date None kalır (sınırsız erişim)
                 
+                hashed_password = generate_password_hash(password)
                 new_user = User(username=username, password=hashed_password, is_admin=False, expire_date=expire_date)
                 db.session.add(new_user)
                 db.session.commit()
@@ -317,12 +332,9 @@ def admin_panel():
     dersler = Ders.query.order_by(Ders.name).all()
     announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
 
-    # İstatistikleri hesapla - YENİ EKLENDİ
     total_users_count = User.query.count()
     active_users_count = User.query.filter(User.expire_date > datetime.utcnow()).count()
 
-    # Ders tamamlama istatistikleri
-    # Her ders için tamamlanan alt başlık sayısını bul
     course_completion_counts = db.session.query(
         Ders.name,
         func.count(UserProgress.id)
@@ -333,7 +345,6 @@ def admin_panel():
      .order_by(func.count(UserProgress.id).desc())\
      .all()
 
-    # Verileri Chart.js için uygun formata dönüştür
     chart_labels = [row[0] for row in course_completion_counts]
     chart_data = [row[1] for row in course_completion_counts]
     
@@ -342,10 +353,10 @@ def admin_panel():
                            dersler=dersler, 
                            is_main_admin=is_main_admin,
                            announcements=announcements,
-                           total_users_count=total_users_count, # Yeni
-                           active_users_count=active_users_count, # Yeni
-                           chart_labels=chart_labels, # Yeni
-                           chart_data=chart_data) # Yeni
+                           total_users_count=total_users_count,
+                           active_users_count=active_users_count,
+                           chart_labels=chart_labels,
+                           chart_data=chart_data)
 
 
 @app.route("/panel", methods=["GET"])
