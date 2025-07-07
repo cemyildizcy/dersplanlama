@@ -225,6 +225,45 @@
             border-color: #545b62;
         }
 
+        /* AI Asistanı Stilleri */
+        .ai-assistant-card {
+            background-color: #e0f7fa; /* Açık mavi tonu */
+            border-color: #b2ebf2;
+            color: #006064;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+        }
+        .ai-assistant-card .card-title {
+            color: #006064;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .ai-response-area {
+            background-color: #ffffff;
+            border: 1px solid #b2ebf2;
+            border-radius: 8px;
+            padding: 1rem;
+            min-height: 100px;
+            max-height: 300px; /* Cevap alanı için maksimum yükseklik */
+            overflow-y: auto; /* Kaydırma çubuğu */
+            margin-top: 1rem;
+            white-space: pre-wrap; /* Metin formatını koru */
+            word-wrap: break-word; /* Uzun kelimeleri böl */
+            color: #333;
+        }
+        .loading-spinner {
+            display: none; /* Varsayılan olarak gizli */
+            text-align: center;
+            margin-top: 1rem;
+        }
+        .loading-spinner .spinner-border {
+            width: 2rem;
+            height: 2rem;
+            color: var(--primary-color);
+        }
+
 
         /* Mobil uyumluluk */
         @media (max-width: 768px) {
@@ -300,6 +339,27 @@
         </div>
     {% endif %}
 
+    {# Yapay Zeka Asistanı Kartı - YENİ EKLENDİ #}
+    <div class="ai-assistant-card mb-4">
+        <h5 class="card-title"><i class="bi bi-robot me-2"></i>Yapay Zeka Asistanı</h5>
+        <div class="mb-3">
+            <textarea class="form-control" id="aiQuestion" rows="3" placeholder="Ders materyalleri hakkında sorularınızı buraya yazın..."></textarea>
+        </div>
+        <button type="button" class="btn btn-primary w-100" id="askAiButton">Sor</button>
+        
+        <div class="loading-spinner" id="aiLoadingSpinner">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+            <p class="text-muted mt-2">Yapay zeka düşünüyor...</p>
+        </div>
+
+        <div class="ai-response-area" id="aiResponseArea">
+            Yapay zeka cevapları burada görünecektir.
+        </div>
+    </div>
+
+
     <div class="row g-4">
         <div class="col-lg-4 col-md-12">
             <div class="sidebar text-center">
@@ -363,7 +423,7 @@
                                     {% if alt_baslik.notlar %}
                                          <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ alt_baslik.notlar }}">Notlar</button>
                                     {% endif %}
-                                    {# Materyal indirme butonları - YENİ EKLENDİ #}
+                                    {# Materyal indirme butonları #}
                                     {% if alt_baslik.materials %}
                                         {% for material in alt_baslik.materials %}
                                             <a href="{{ url_for('download_file', filename=material.filename) }}" class="btn btn-sm btn-material" target="_blank">
@@ -406,6 +466,50 @@ var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggl
 var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
   return new bootstrap.Tooltip(tooltipTriggerEl)
 })
+
+// Yapay Zeka Asistanı JavaScript Mantığı
+document.addEventListener('DOMContentLoaded', function() {
+    const askAiButton = document.getElementById('askAiButton');
+    const aiQuestionInput = document.getElementById('aiQuestion');
+    const aiResponseArea = document.getElementById('aiResponseArea');
+    const aiLoadingSpinner = document.getElementById('aiLoadingSpinner');
+
+    askAiButton.addEventListener('click', async function() {
+        const question = aiQuestionInput.value.trim();
+        if (!question) {
+            aiResponseArea.textContent = "Lütfen bir soru yazın.";
+            return;
+        }
+
+        aiResponseArea.textContent = ""; // Önceki cevabı temizle
+        aiLoadingSpinner.style.display = 'block'; // Yükleniyor spinner'ını göster
+        askAiButton.disabled = true; // Butonu devre dışı bırak
+
+        try {
+            const response = await fetch('/ask_ai', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ question: question })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                aiResponseArea.textContent = data.answer;
+            } else {
+                aiResponseArea.textContent = "Hata: " + (data.error || "Yapay zeka cevabı alınamadı.");
+            }
+        } catch (error) {
+            console.error('Yapay zeka isteği sırasında hata:', error);
+            aiResponseArea.textContent = "İstek gönderilirken bir hata oluştu. Lütfen ağ bağlantınızı kontrol edin.";
+        } finally {
+            aiLoadingSpinner.style.display = 'none'; // Yükleniyor spinner'ını gizle
+            askAiButton.disabled = false; // Butonu tekrar etkinleştir
+        }
+    });
+});
 </script>
 </body>
 </html>

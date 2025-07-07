@@ -1,6 +1,6 @@
 # Gerekli kütüphaneleri ve modülleri import ediyoruz
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,6 +9,7 @@ from functools import wraps
 from sqlalchemy import UniqueConstraint
 from werkzeug.utils import secure_filename # Güvenli dosya adı için
 from sqlalchemy import func # SQL fonksiyonları için (örn. count)
+import requests # API çağrıları için
 
 # --- UYGULAMA VE VERİTABANI KURULUMU ---
 
@@ -223,23 +224,19 @@ def admin_panel():
                 flash("Bu kullanıcı adı zaten mevcut.", "danger")
             else:
                 expire_date = None
-                # access_days_str'yi int'e çevirmeden önce kontrol et
-                # Çok büyük bir sayı veya negatif sayı girilmesini engelle
                 if access_days_str.isdigit():
                     days_to_add = int(access_days_str)
-                    # Makul bir üst limit belirleyelim, örneğin 36500 gün (yaklaşık 100 yıl)
-                    if days_to_add > 0 and days_to_add <= 36500: # YENİ KONTROL
+                    if days_to_add > 0 and days_to_add <= 36500:
                         expire_date = datetime.utcnow() + timedelta(days=days_to_add)
-                    elif days_to_add <= 0: # Negatif veya 0 gün girilirse
+                    elif days_to_add <= 0:
                         flash("Erişim süresi pozitif bir sayı olmalıdır.", "danger")
                         return redirect(url_for('admin_panel'))
-                    else: # Çok büyük bir sayı girilirse
+                    else:
                         flash("Erişim süresi çok büyük. Lütfen daha küçük bir değer girin.", "danger")
                         return redirect(url_for('admin_panel'))
-                elif access_days_str: # Sayısal olmayan ama boş olmayan bir değer girilirse
+                elif access_days_str:
                     flash("Erişim süresi sadece sayı içermelidir.", "danger")
                     return redirect(url_for('admin_panel'))
-                # Eğer access_days_str boşsa, expire_date None kalır (sınırsız erişim)
                 
                 hashed_password = generate_password_hash(password)
                 new_user = User(username=username, password=hashed_password, is_admin=False, expire_date=expire_date)
@@ -577,6 +574,53 @@ def edit_alt_baslik(alt_baslik_id):
                 return redirect(url_for('admin_panel'))
         return redirect(url_for('edit_alt_baslik', alt_baslik_id=alt_baslik.id))
     return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler)
+
+@app.route("/ask_ai", methods=["POST"])
+@login_required
+def ask_ai():
+    user_question = request.json.get("question")
+    if not user_question:
+        return jsonify({"error": "Soru boş olamaz."}), 400
+
+    # API anahtarını ortam değişkeninden oku
+    # Render'da "GEMINI_API_KEY" adında bir ortam değişkeni ayarladığınızdan emin olun.
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("HATA: GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
+        return jsonify({"error": "Yapay zeka asistanı yapılandırma hatası: API anahtarı eksik."}), 500
+
+    chat_history = []
+    chat_history.push({ role: "user", parts: [{ text: prompt }] });
+    
+    payload = {
+        "contents": chat_history,
+        "generationConfig": {
+            "temperature": 0.7,
+            "topK": 40,
+            "topP": 0.95,
+            "maxOutputTokens": 800
+        }
+    }
+    
+    apiUrl = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}" # api_key kullanıldı
+
+    try:
+        response = requests.post(apiUrl, json=payload, headers={'Content-Type': 'application/json'})
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get("candidates") and result["candidates"][0].get("content") and result["candidates"][0]["content"].get("parts"):
+            ai_response = result["candidates"][0]["content"]["parts"][0]["text"]
+            return jsonify({"answer": ai_response})
+        else:
+            print(f"DEBUG: AI'dan beklenen formatta cevap gelmedi: {result}")
+            return jsonify({"error": "Yapay zeka cevabı alınamadı. Lütfen daha sonra tekrar deneyin."}), 500
+    except requests.exceptions.RequestException as e:
+        print(f"HATA: Gemini API çağrısı sırasında hata oluştu: {e}")
+        return jsonify({"error": f"Yapay zeka ile iletişim hatası: {e}"}), 500
+    except Exception as e:
+        print(f"HATA: Beklenmeyen bir hata oluştu: {e}")
+        return jsonify({"error": f"Beklenmeyen bir hata oluştu: {e}"}), 500
 
 
 # Lokalde çalıştırmak için `if __name__` bloğu aynı kalıyor
