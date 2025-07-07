@@ -423,19 +423,24 @@
     </div>
 
     {# Önerilen İçerikler Kartı #}
-    {% if recommended_alt_basliks %}
+    {# recommended_alt_basliks listesi boş olsa bile kartı gösteriyoruz, böylece neden boş olduğunu anlayabiliriz. #}
+    {% if recommended_alt_basliks is not none %} {# None kontrolü eklendi #}
         <div class="recommendation-card mb-4">
             <h5 class="card-title"><i class="bi bi-lightbulb-fill me-2"></i>Sizin İçin Önerilen İçerikler</h5>
             <ul class="list-group list-group-flush">
-                {% for rec_ab in recommended_alt_basliks %}
-                    <a href="{{ url_for('user_panel', ders_id=rec_ab.konu.ders_id, konu_id=rec_ab.konu_id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>{{ rec_ab.name }}</strong>
-                            <small class="text-muted d-block">{{ rec_ab.konu.ders.name }} / {{ rec_ab.konu.name }}</small>
-                        </div>
-                        <i class="bi bi-arrow-right-circle-fill"></i>
-                    </a>
-                {% endfor %}
+                {% if recommended_alt_basliks %} {# Öneri varsa listeyi göster #}
+                    {% for rec_ab in recommended_alt_basliks %}
+                        <a href="{{ url_for('user_panel', ders_id=rec_ab.konu.ders_id, konu_id=rec_ab.konu_id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ rec_ab.name }}</strong>
+                                <small class="text-muted d-block">{{ rec_ab.konu.ders.name }} / {{ rec_ab.konu.name }}</small>
+                            </div>
+                            <i class="bi bi-arrow-right-circle-fill"></i>
+                        </a>
+                    {% endfor %}
+                {% else %} {# Öneri yoksa mesaj göster #}
+                    <li class="list-group-item text-muted text-center">Şu an için size özel bir öneri bulunmuyor. Belki tüm dersleri tamamladınız veya yeni içerik bekliyor!</li>
+                {% endif %}
             </ul>
         </div>
     {% endif %}

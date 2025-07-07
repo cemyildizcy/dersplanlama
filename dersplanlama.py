@@ -1,6 +1,6 @@
 # Gerekli kütüphaneleri ve modülleri import ediyoruz
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify, current_app # current_app eklendi
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -182,7 +182,7 @@ def admin_panel():
         delete_type = request.form.get("delete_type")
         delete_id = request.form.get("id", type=int)
         
-        print(f"DEBUG: Silme isteği alındı. Tür: {delete_type}, ID: {delete_id}, Admin mi: {session.get('is_admin')}, Ana Admin mi: {is_main_admin}")
+        current_app.logger.debug(f"DEBUG: Silme isteği alındı. Tür: {delete_type}, ID: {delete_id}, Admin mi: {session.get('is_admin')}, Ana Admin mi: {is_main_admin}")
 
         if delete_type and delete_id:
             item_to_delete = None
@@ -200,33 +200,33 @@ def admin_panel():
                 elif delete_type == "material": 
                     material_to_delete = Material.query.get_or_404(delete_id)
                     file_path = os.path.join(app.config['UPLOAD_FOLDER'], material_to_delete.filename)
-                    print(f"DEBUG: Materyal dosyası silinmeye çalışılıyor: {file_path}")
+                    current_app.logger.debug(f"DEBUG: Materyal dosyası silinmeye çalışılıyor: {file_path}")
                     if os.path.exists(file_path):
                         try:
                             os.remove(file_path)
-                            print(f"DEBUG: Dosya {file_path} başarıyla silindi.")
+                            current_app.logger.debug(f"DEBUG: Dosya {file_path} başarıyla silindi.")
                         except OSError as e:
-                            print(f"HATA: Dosya silinirken hata oluştu {file_path}: {e}")
+                            current_app.logger.error(f"HATA: Dosya silinirken hata oluştu {file_path}: {e}")
                             flash(f"Dosya silinirken bir hata oluştu: {e}", "danger")
                             db.session.rollback()
                             return redirect(url_for('admin_panel'))
                     item_to_delete = material_to_delete
                 
                 if item_to_delete:
-                    print(f"DEBUG: Silinecek öğe bulundu: {item_to_delete}")
+                    current_app.logger.debug(f"DEBUG: Silinecek öğe bulundu: {item_to_delete}")
                     if delete_type == 'user' and item_to_delete.username == 'admin':
                         flash("Ana admin kullanıcısı silinemez.", "danger")
-                        print("DEBUG: Ana admin kullanıcısı silinmeye çalışıldı.")
+                        current_app.logger.debug("DEBUG: Ana admin kullanıcısı silinmeye çalışıldı.")
                     else:
                         db.session.delete(item_to_delete)
                         db.session.commit()
                         flash(f"{delete_type.capitalize()} başarıyla silindi.", "success")
-                        print(f"DEBUG: {delete_type.capitalize()} ID {delete_id} veritabanından başarıyla silindi.")
+                        current_app.logger.debug(f"DEBUG: {delete_type.capitalize()} ID {delete_id} veritabanından başarıyla silindi.")
                 else:
-                    print(f"DEBUG: Silme için öğe bulunamadı. Tür: {delete_type}, ID: {delete_id}.")
+                    current_app.logger.debug(f"DEBUG: Silme için öğe bulunamadı. Tür: {delete_type}, ID: {delete_id}.")
             except Exception as e:
                 db.session.rollback()
-                print(f"HATA: Silme işlemi sırasında beklenmeyen bir hata oluştu ({delete_type} ID {delete_id}): {e}")
+                current_app.logger.error(f"HATA: Silme işlemi sırasında beklenmeyen bir hata oluştu ({delete_type} ID {delete_id}): {e}")
                 flash(f"Silme işlemi sırasında bir hata oluştu: {e}", "danger")
             return redirect(url_for('admin_panel'))
         
@@ -376,6 +376,8 @@ def admin_panel():
 @app.route("/panel", methods=["GET"])
 @login_required
 def user_panel():
+    current_app.logger.debug("--- user_panel fonksiyonu çağrıldı ---") # DEBUG: Fonksiyonun çağrıldığını göster
+
     dersler = Ders.query.order_by(Ders.name).all()
     
     selected_ders_id = request.args.get('ders_id', type=int)
@@ -398,6 +400,7 @@ def user_panel():
     if user:
         progress_records = UserProgress.query.filter_by(user_id=user.id).all()
         completed_alt_baslik_ids = {p.alt_baslik_id for p in progress_records}
+    current_app.logger.debug(f"DEBUG: Kullanıcının tamamladığı alt başlık ID'leri: {completed_alt_baslik_ids}") # DEBUG
 
     private_notes_map = {}
     if user and selected_konu:
@@ -405,61 +408,53 @@ def user_panel():
             note = PrivateNote.query.filter_by(user_id=user.id, alt_baslik_id=alt_baslik.id).first()
             if note:
                 private_notes_map[alt_baslik.id] = note.note_content
+    current_app.logger.debug(f"DEBUG: Kullanıcının özel notları: {private_notes_map.keys()}") # DEBUG
+
 
     # Kişiselleştirilmiş İçerik Önerileri
     recommended_alt_basliks = []
     if user:
-        # Tüm alt başlıkları al
         all_alt_basliks = AltBaslik.query.all()
-        print(f"DEBUG: Toplam alt başlık sayısı: {len(all_alt_basliks)}") # DEBUG
+        current_app.logger.debug(f"DEBUG: Toplam alt başlık sayısı: {len(all_alt_basliks)}") # DEBUG
         
-        # Kullanıcının tamamlamadığı alt başlıkları filtrele
         uncompleted_alt_basliks = [
             ab for ab in all_alt_basliks 
             if ab.id not in completed_alt_baslik_ids
         ]
-        print(f"DEBUG: Tamamlanmamış alt başlık sayısı: {len(uncompleted_alt_basliks)}") # DEBUG
+        current_app.logger.debug(f"DEBUG: Tamamlanmamış alt başlık sayısı: {len(uncompleted_alt_basliks)}") # DEBUG
 
         if selected_konu:
-            print(f"DEBUG: Seçili konu: {selected_konu.name}") # DEBUG
-            # Eğer bir konu seçiliyse, o konudaki bir sonraki tamamlanmamış alt başlığı bulmaya çalış
+            current_app.logger.debug(f"DEBUG: Seçili konu: {selected_konu.name}") # DEBUG
             found_next_in_selected_konu = False
             for ab in selected_konu.alt_basliklar:
                 if ab.id not in completed_alt_baslik_ids:
                     recommended_alt_basliks.append(ab)
                     found_next_in_selected_konu = True
-                    print(f"DEBUG: Seçili konuda ilk tamamlanmamış öneri: {ab.name}") # DEBUG
-                    break # Sadece ilkini öner
+                    current_app.logger.debug(f"DEBUG: Seçili konuda ilk tamamlanmamış öneri: {ab.name}") # DEBUG
+                    break
             
-            # Eğer mevcut konuda tamamlanmamış başka öğe yoksa veya hiç öğe yoksa, genelden öner
             if not found_next_in_selected_konu and uncompleted_alt_basliks:
-                # Rastgele 3 tane öner
-                # random.sample, eğer popülasyon (uncompleted_alt_basliks) istenen k'dan küçükse hata verir.
-                # Bu yüzden min(len(uncompleted_alt_basliks), 3) kullanarak güvenli hale getiriyoruz.
                 num_to_sample = min(len(uncompleted_alt_basliks), 3)
-                if num_to_sample > 0: # Sadece örnek alınacak eleman varsa
+                if num_to_sample > 0:
                     recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
-                    print(f"DEBUG: Seçili konuda başka yok, genelden rastgele {num_to_sample} öneri eklendi.") # DEBUG
+                    current_app.logger.debug(f"DEBUG: Seçili konuda başka yok, genelden rastgele {num_to_sample} öneri eklendi.") # DEBUG
         elif uncompleted_alt_basliks:
-            # Hiç ders/konu seçili değilse, genelden rastgele 3 tane öner
             num_to_sample = min(len(uncompleted_alt_basliks), 3)
-            if num_to_sample > 0: # Sadece örnek alınacak eleman varsa
+            if num_to_sample > 0:
                 recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
-                print(f"DEBUG: Hiç konu seçili değil, genelden rastgele {num_to_sample} öneri eklendi.") # DEBUG
+                current_app.logger.debug(f"DEBUG: Hiç konu seçili değil, genelden rastgele {num_to_sample} öneri eklendi.") # DEBUG
         else:
-            print("DEBUG: Tamamlanmamış alt başlık bulunamadı, öneri yok.") # DEBUG
+            current_app.logger.debug("DEBUG: Tamamlanmamış alt başlık bulunamadı, öneri yok.") # DEBUG
     else:
-        print("DEBUG: Kullanıcı oturumu yok veya tamamlanmamış alt başlık bulunamadı.") # DEBUG
+        current_app.logger.debug("DEBUG: Kullanıcı oturumu yok veya tamamlanmamış alt başlık bulunamadı.") # DEBUG
     
-    # Önerilen alt başlıkların benzersiz olduğundan emin ol (aynı alt başlık birden fazla kez gelmesin)
-    # ve sıralamayı korumak için listeye çevir
     unique_recommended_alt_basliks = []
     seen_ids = set()
     for ab in recommended_alt_basliks:
         if ab.id not in seen_ids:
             unique_recommended_alt_basliks.append(ab)
             seen_ids.add(ab.id)
-    print(f"DEBUG: Son önerilen alt başlıklar ({len(unique_recommended_alt_basliks)} adet): {[ab.name for ab in unique_recommended_alt_basliks]}") # DEBUG
+    current_app.logger.debug(f"DEBUG: Son önerilen alt başlıklar ({len(unique_recommended_alt_basliks)} adet): {[ab.name for ab in unique_recommended_alt_basliks]}") # DEBUG
 
 
     completion_percentage = 0
@@ -666,7 +661,7 @@ def ask_ai():
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        print("HATA: GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
+        current_app.logger.error("HATA: GEMINI_API_KEY ortam değişkeni ayarlanmamış.") # Loglama
         return jsonify({"error": "Yapay zeka asistanı yapılandırma hatası: API anahtarı eksik."}), 500
 
     chat_history = []
@@ -693,13 +688,13 @@ def ask_ai():
             ai_response = result["candidates"][0]["content"]["parts"][0]["text"]
             return jsonify({"answer": ai_response})
         else:
-            print(f"DEBUG: AI'dan beklenen formatta cevap gelmedi: {result}")
+            current_app.logger.debug(f"DEBUG: AI'dan beklenen formatta cevap gelmedi: {result}") # Loglama
             return jsonify({"error": "Yapay zeka cevabı alınamadı. Lütfen daha sonra tekrar deneyin."}), 500
     except requests.exceptions.RequestException as e:
-        print(f"HATA: Gemini API çağrısı sırasında hata oluştu: {e}")
+        current_app.logger.error(f"HATA: Gemini API çağrısı sırasında hata oluştu: {e}") # Loglama
         return jsonify({"error": f"Yapay zeka ile iletişim hatası: {e}"}), 500
     except Exception as e:
-        print(f"HATA: Beklenmeyen bir hata oluştu: {e}")
+        current_app.logger.error(f"HATA: Beklenmeyen bir hata oluştu: {e}") # Loglama
         return jsonify({"error": f"Beklenmeyen bir hata oluştu: {e}"}), 500
 
 
