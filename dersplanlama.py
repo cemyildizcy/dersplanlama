@@ -582,15 +582,15 @@ def ask_ai():
     if not user_question:
         return jsonify({"error": "Soru boş olamaz."}), 400
 
-    # API anahtarını ortam değişkeninden oku
-    # Render'da "GEMINI_API_KEY" adında bir ortam değişkeni ayarladığınızdan emin olun.
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("HATA: GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
         return jsonify({"error": "Yapay zeka asistanı yapılandırma hatası: API anahtarı eksik."}), 500
 
     chat_history = []
-    chat_history.push({ role: "user", parts: [{ text: prompt }] });
+    # Python'da listeye eleman eklemek için .append() kullanılır.
+    # user_question, kullanıcının sorduğu sorudur.
+    chat_history.append({"role": "user", "parts": [{"text": user_question}]}) 
     
     payload = {
         "contents": chat_history,
@@ -602,7 +602,7 @@ def ask_ai():
         }
     }
     
-    apiUrl = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}" # api_key kullanıldı
+    apiUrl = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
     try:
         response = requests.post(apiUrl, json=payload, headers={'Content-Type': 'application/json'})
