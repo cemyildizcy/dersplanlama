@@ -225,78 +225,6 @@
             border-color: #545b62;
         }
 
-        /* AI Asistanı Stilleri */
-        .ai-assistant-card {
-            background-color: #e0f7fa; /* Açık mavi tonu */
-            border-color: #b2ebf2;
-            color: #006064;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            margin-bottom: 1.5rem;
-            padding: 1.5rem;
-        }
-        .ai-assistant-card .card-title {
-            color: #006064;
-            font-weight: 700;
-            margin-bottom: 1rem;
-        }
-        .ai-response-area {
-            background-color: #ffffff;
-            border: 1px solid #b2ebf2;
-            border-radius: 8px;
-            padding: 1rem;
-            min-height: 100px;
-            max-height: 300px; /* Cevap alanı için maksimum yükseklik */
-            overflow-y: auto; /* Kaydırma çubuğu */
-            margin-top: 1rem;
-            white-space: pre-wrap; /* Metin formatını koru */
-            word-wrap: break-word; /* Uzun kelimeleri böl */
-            color: #333;
-        }
-        .loading-spinner {
-            display: none; /* Varsayılan olarak gizli */
-            text-align: center;
-            margin-top: 1rem;
-        }
-        .loading-spinner .spinner-border {
-            width: 2rem;
-            height: 2rem;
-            color: var(--primary-color);
-        }
-
-        /* Önerilen İçerikler Stili */
-        .recommendation-card {
-            background-color: #e6f7ff; /* Açık mavi */
-            border-color: #b3e0ff;
-            color: #0056b3;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            margin-bottom: 1.5rem;
-            padding: 1.5rem;
-        }
-        .recommendation-card .card-title {
-            color: #0056b3;
-            font-weight: 700;
-            margin-bottom: 1rem;
-        }
-        .recommendation-card .list-group-item {
-            background-color: #d9edf7; /* Daha koyu mavi */
-            border-color: #a6d9ee;
-            color: #003366;
-            font-weight: 500;
-            transition: background-color 0.3s ease;
-            border-radius: 8px !important; /* Köşeleri yuvarla */
-            margin-bottom: 5px; /* Aralarında boşluk bırak */
-        }
-        .recommendation-card .list-group-item:hover {
-            background-color: #c0e6f4;
-            transform: translateY(-2px); /* Hafif yukarı kaydırma efekti */
-        }
-        .recommendation-card .list-group-item:last-child {
-            margin-bottom: 0;
-        }
-
-
         /* Mobil uyumluluk */
         @media (max-width: 768px) {
             .main-container {
@@ -371,48 +299,12 @@
         </div>
     {% endif %}
 
-    {# Yapay Zeka Asistanı Kartı #}
-    <div class="ai-assistant-card mb-4">
-        <h5 class="card-title"><i class="bi bi-robot me-2"></i>Yapay Zeka Asistanı</h5>
-        <div class="mb-3">
-            <textarea class="form-control" id="aiQuestion" rows="3" placeholder="Ders materyalleri hakkında sorularınızı buraya yazın..."></textarea>
-        </div>
-        <button type="button" class="btn btn-primary w-100" id="askAiButton">Sor</button>
-        
-        <div class="loading-spinner" id="aiLoadingSpinner">
-            <div class="spinner-border" role="status">
-                <span class="visually-hidden">Yükleniyor...</span>
-            </div>
-            <p class="text-muted mt-2">Yapay zeka düşünüyor...</p>
-        </div>
+    {# Yapay Zeka Asistanı Kartı - Tamamen Kaldırıldı #}
+    {# Önceki AI Asistanı kartı burada yer alıyordu, şimdi tamamen kaldırıldı. #}
 
-        <div class="ai-response-area" id="aiResponseArea">
-            Yapay zeka cevapları burada görünecektir.
-        </div>
-    </div>
 
-    {# Önerilen İçerikler Kartı #}
-    {# recommended_alt_basliks listesi boş olsa bile kartı gösteriyoruz, böylece neden boş olduğunu anlayabiliriz. #}
-    {% if recommended_alt_basliks is not none %}
-        <div class="recommendation-card mb-4">
-            <h5 class="card-title"><i class="bi bi-lightbulb-fill me-2"></i>Sizin İçin Önerilen İçerikler</h5>
-            <ul class="list-group list-group-flush">
-                {% if recommended_alt_basliks %}
-                    {% for rec_ab in recommended_alt_basliks %}
-                        <a href="{{ url_for('user_panel', ders_id=rec_ab.konu.ders_id, konu_id=rec_ab.konu_id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>{{ rec_ab.name }}</strong>
-                                <small class="text-muted d-block">{{ rec_ab.konu.ders.name }} / {{ rec_ab.konu.name }}</small>
-                            </div>
-                            <i class="bi bi-arrow-right-circle-fill"></i>
-                        </a>
-                    {% endfor %}
-                {% else %}
-                    <li class="list-group-item text-muted text-center">Şu an için size özel bir öneri bulunmuyor. Belki tüm dersleri tamamladınız veya yeni içerik bekliyor!</li>
-                {% endif %}
-            </ul>
-        </div>
-    {% endif %}
+    {# Önerilen İçerikler Kartı - Tamamen Kaldırıldı #}
+    {# Kişiselleştirilmiş öğrenme yolları özelliği kaldırıldı, bu kart artık gösterilmeyecek. #}
 
 
     <div class="row g-4">
@@ -522,7 +414,8 @@ var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
   return new bootstrap.Tooltip(tooltipTriggerEl)
 })
 
-// Yapay Zeka Asistanı JavaScript Mantığı (Global Asistan)
+// Yapay Zeka Asistanı JavaScript Mantığı (Global Asistan) - Tamamen kaldırıldı
+/*
 document.addEventListener('DOMContentLoaded', function() {
     const askAiButton = document.getElementById('askAiButton');
     const aiQuestionInput = document.getElementById('aiQuestion');
@@ -567,6 +460,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+*/
 </script>
 </body>
 </html>

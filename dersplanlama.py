@@ -9,8 +9,8 @@ from functools import wraps
 from sqlalchemy import UniqueConstraint
 from werkzeug.utils import secure_filename # Güvenli dosya adı için
 from sqlalchemy import func # SQL fonksiyonları için (örn. count)
-import requests # API çağrıları için (AI Asistanı için hala gerekli)
-import random # Rastgele seçim için - TEKRAR EKLENDİ
+# requests modülü kaldırıldı (AI Asistanı kaldırıldığı için artık gerek yok)
+# random modülü kaldırıldı (Kişiselleştirilmiş öneriler kaldırıldığı için artık gerek yok)
 
 # --- UYGULAMA VE VERİTABANI KURULUMU ---
 
@@ -42,7 +42,7 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- VERİTABANI MODELLERİ ---
+# --- VERITABANI MODELLERİ ---
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,7 +51,6 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     expire_date = db.Column(db.DateTime)
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade="all, delete-orphan")
-    # PrivateNote ilişkisi kaldırıldı
 
 
 class Ders(db.Model):
@@ -73,7 +72,6 @@ class AltBaslik(db.Model):
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
-    # PrivateNote ilişkisi kaldırıldı
 
 class UserProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -105,20 +103,6 @@ class Material(db.Model):
 
     def __repr__(self):
         return f'<Material {self.original_filename}>'
-
-# PrivateNote modeli kaldırıldı
-# class PrivateNote(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-#     alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
-#     note_content = db.Column(db.Text, nullable=True)
-#     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-#     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-#     __table_args__ = (UniqueConstraint('user_id', 'alt_baslik_id', name='_user_alt_baslik_note_uc'),)
-
-#     def __repr__(self):
-#         return f'<PrivateNote UserID: {self.user_id}, AltBaslikID: {self.alt_baslik_id}>'
 
 
 # --- YARDIMCI FONKSİYONLAR (Devamı) ---
@@ -403,51 +387,53 @@ def user_panel():
         completed_alt_baslik_ids = {p.alt_baslik_id for p in progress_records}
     current_app.logger.debug(f"DEBUG: Kullanıcının tamamladığı alt başlık ID'leri: {completed_alt_baslik_ids}")
 
-    # Kişiselleştirilmiş İçerik Önerileri (Mantık aynı kalacak)
-    recommended_alt_basliks = []
-    if user:
-        all_alt_basliks = AltBaslik.query.all()
-        current_app.logger.debug(f"DEBUG: Toplam alt başlık sayısı: {len(all_alt_basliks)}")
+    # Kişiselleştirilmiş İçerik Önerileri kaldırıldı
+    # recommended_alt_basliks = []
+    # if user:
+    #     all_alt_basliks = AltBaslik.query.all()
+    #     current_app.logger.debug(f"DEBUG: Toplam alt başlık sayısı: {len(all_alt_basliks)}")
         
-        uncompleted_alt_basliks = [
-            ab for ab in all_alt_basliks 
-            if ab.id not in completed_alt_baslik_ids
-        ]
-        current_app.logger.debug(f"DEBUG: Tamamlanmamış alt başlık sayısı: {len(uncompleted_alt_basliks)}")
+    #     uncompleted_alt_basliks = [
+    #         ab for ab in all_alt_basliks 
+    #         if ab.id not in completed_alt_baslik_ids
+    #     ]
+    #     current_app.logger.debug(f"DEBUG: Tamamlanmamış alt başlık sayısı: {len(uncompleted_alt_basliks)}")
 
-        if selected_konu:
-            current_app.logger.debug(f"DEBUG: Seçili konu: {selected_konu.name}")
-            found_next_in_selected_konu = False
-            for ab in selected_konu.alt_basliklar:
-                if ab.id not in completed_alt_baslik_ids:
-                    recommended_alt_basliks.append(ab)
-                    found_next_in_selected_konu = True
-                    current_app.logger.debug(f"DEBUG: Seçili konuda ilk tamamlanmamış öneri: {ab.name}")
-                    break
+    #     if selected_konu:
+    #         current_app.logger.debug(f"DEBUG: Seçili konu: {selected_konu.name}")
+    #         found_next_in_selected_konu = False
+    #         for ab in selected_konu.alt_basliklar:
+    #             if ab.id not in completed_alt_baslik_ids:
+    #                 recommended_alt_basliks.append(ab)
+    #                 found_next_in_selected_konu = True
+    #                 current_app.logger.debug(f"DEBUG: Seçili konuda ilk tamamlanmamış öneri: {ab.name}")
+    #                 break
             
-            if not found_next_in_selected_konu and uncompleted_alt_basliks:
-                num_to_sample = min(len(uncompleted_alt_basliks), 3)
-                if num_to_sample > 0:
-                    recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
-                    current_app.logger.debug(f"DEBUG: Seçili konuda başka yok, genelden rastgele {num_to_sample} öneri eklendi.")
-        elif uncompleted_alt_basliks:
-            num_to_sample = min(len(uncompleted_alt_basliks), 3)
-            if num_to_sample > 0:
-                recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
-                current_app.logger.debug(f"DEBUG: Hiç konu seçili değil, genelden rastgele {num_to_sample} öneri eklendi.")
-        else:
-            current_app.logger.debug("DEBUG: Tamamlanmamış alt başlık bulunamadı, öneri yok.")
-    else:
-        current_app.logger.debug("DEBUG: Kullanıcı oturumu yok veya tamamlanmamış alt başlık bulunamadı.")
+    #         if not found_next_in_selected_konu and uncompleted_alt_basliks:
+    #             num_to_sample = min(len(uncompleted_alt_basliks), 3)
+    #             if num_to_sample > 0:
+    #                 recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
+    #                 current_app.logger.debug(f"DEBUG: Seçili konuda başka yok, genelden rastgele {num_to_sample} öneri eklendi.")
+    #     elif uncompleted_alt_basliks:
+    #         num_to_sample = min(len(uncompleted_alt_basliks), 3)
+    #         if num_to_sample > 0:
+    #             recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
+    #             current_app.logger.debug(f"DEBUG: Hiç konu seçili değil, genelden rastgele {num_to_sample} öneri eklendi.")
+    #     else:
+    #         current_app.logger.debug("DEBUG: Tamamlanmamış alt başlık bulunamadı, öneri yok.")
+    # else:
+    #     current_app.logger.debug("DEBUG: Kullanıcı oturumu yok veya tamamlanmamış alt başlık bulunamadı.")
     
-    unique_recommended_alt_basliks = []
-    seen_ids = set()
-    for ab in recommended_alt_basliks:
-        if ab.id not in seen_ids:
-            unique_recommended_alt_basliks.append(ab)
-            seen_ids.add(ab.id)
-    current_app.logger.debug(f"DEBUG: Son önerilen alt başlıklar ({len(unique_recommended_alt_basliks)} adet): {[ab.name for ab in unique_recommended_alt_basliks]}")
+    # unique_recommended_alt_basliks = []
+    # seen_ids = set()
+    # for ab in recommended_alt_basliks:
+    #     if ab.id not in seen_ids:
+    #         unique_recommended_alt_basliks.append(ab)
+    #         seen_ids.add(ab.id)
+    # current_app.logger.debug(f"DEBUG: Son önerilen alt başlıklar ({len(unique_recommended_alt_basliks)} adet): {[ab.name for ab in unique_recommended_alt_basliks]}")
 
+    # recommended_alt_basliks artık template'e gönderilmeyecek
+    unique_recommended_alt_basliks = [] # Boş liste olarak kalacak
 
     completion_percentage = 0
     if selected_konu:
@@ -469,7 +455,7 @@ def user_panel():
                            completed_alt_baslik_ids=completed_alt_baslik_ids,
                            completion_percentage=completion_percentage,
                            active_announcements=active_announcements,
-                           recommended_alt_basliks=unique_recommended_alt_basliks)
+                           recommended_alt_basliks=unique_recommended_alt_basliks) # Hala boş liste gönderiyoruz
 
 
 @app.route("/mark_completed", methods=["POST"])
