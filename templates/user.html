@@ -296,36 +296,6 @@
             margin-bottom: 0;
         }
 
-        /* AI İçerik Araçları Stili */
-        .ai-content-tools-section {
-            background-color: #f0f8ff; /* Çok açık mavi */
-            border-radius: 10px;
-            padding: 1rem;
-            margin-top: 1rem;
-            border: 1px solid #cceeff;
-        }
-        .ai-content-tools-section .btn {
-            font-size: 0.9rem;
-            padding: 0.6rem 0.8rem;
-        }
-        .ai-content-tools-section .ai-output-area {
-            background-color: #ffffff;
-            border: 1px solid #cceeff;
-            border-radius: 8px;
-            padding: 0.8rem;
-            min-height: 80px;
-            max-height: 200px;
-            overflow-y: auto;
-            margin-top: 1rem;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            font-size: 0.9rem;
-            color: #333;
-        }
-        .ai-content-tools-section .loading-spinner {
-            margin-top: 0.8rem;
-        }
-
 
         /* Mobil uyumluluk */
         @media (max-width: 768px) {
@@ -532,37 +502,6 @@
                                     </form>
                                 </div>
                             </li>
-                            {# AI Destekli İçerik Araçları Bölümü #}
-                            <li class="list-group-item ai-content-tools-section">
-                                <h6 class="mb-2" style="color: var(--primary-color); font-weight: 600;"><i class="bi bi-magic me-1"></i> Akıllı İçerik Araçları</h6>
-                                {% if not alt_baslik.notlar %}
-                                    <div class="alert alert-warning py-2 small">Bu alt başlık için ders notu bulunamadı. Lütfen önce not ekleyin.</div>
-                                {% else %}
-                                    <div class="d-flex flex-wrap gap-2 mb-3">
-                                        <button type="button" class="btn btn-sm btn-info ai-transform-button" data-transform-type="podcast" data-alt-baslik-id="{{ alt_baslik.id }}">
-                                            <i class="bi bi-mic-fill me-1"></i> Podcast Senaryosu Oluştur {# Metin güncellendi #}
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-info ai-transform-button" data-transform-type="summarize" data-alt-baslik-id="{{ alt_baslik.id }}">
-                                            <i class="bi bi-file-text-fill me-1"></i> Özetle
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-info ai-transform-button" data-transform-type="simplify" data-alt-baslik-id="{{ alt_baslik.id }}">
-                                            <i class="bi bi-lightbulb-fill me-1"></i> Basit Dille Açıkla
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-info ai-transform-button" data-transform-type="keywords" data-alt-baslik-id="{{ alt_baslik.id }}">
-                                            <i class="bi bi-key-fill me-1"></i> Anahtar Kavramlar
-                                        </button>
-                                    </div>
-                                    <div class="loading-spinner" id="aiTransformLoadingSpinner-{{ alt_baslik.id }}">
-                                        <div class="spinner-border text-primary" role="status">
-                                            <span class="visually-hidden">Yükleniyor...</span>
-                                        </div>
-                                        <p class="text-muted mt-1 small">Yapay zeka içeriği dönüştürüyor...</p>
-                                    </div>
-                                    <div class="ai-output-area" id="aiTransformOutput-{{ alt_baslik.id }}">
-                                        Dönüştürülen içerik burada görünecektir.
-                                    </div>
-                                {% endif %}
-                            </li>
                         {% else %}
                             <li class="list-group-item text-muted">Bu konu için henüz alt başlık eklenmemiş.</li>
                         {% endfor %}
@@ -627,50 +566,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
-    // AI Destekli İçerik Araçları JavaScript Mantığı (Alt Başlık Bazlı)
-    document.querySelectorAll('.ai-transform-button').forEach(button => {
-        button.addEventListener('click', async function() {
-            const altBaslikId = this.dataset.altBaslikId;
-            const transformType = this.dataset.transformType;
-            const outputArea = document.getElementById(`aiTransformOutput-${altBaslikId}`);
-            const loadingSpinner = document.getElementById(`aiTransformLoadingSpinner-${altBaslikId}`);
-            const buttonsInSection = this.closest('.ai-content-tools-section').querySelectorAll('.ai-transform-button');
-
-            if (!altBaslikId || !transformType) {
-                outputArea.textContent = "Hata: Eksik bilgi.";
-                return;
-            }
-
-            outputArea.textContent = ""; // Önceki cevabı temizle
-            loadingSpinner.style.display = 'block'; // Yükleniyor spinner'ını göster
-            buttonsInSection.forEach(btn => btn.disabled = true); // Tüm butonları devre dışı bırak
-
-            try {
-                const response = await fetch('/ai_transform_note', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ alt_baslik_id: altBaslikId, transform_type: transformType })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    outputArea.textContent = data.transformed_content;
-                } else {
-                    outputArea.textContent = "Hata: " + (data.error || "İçerik dönüştürülemedi.");
-                }
-            } catch (error) {
-                console.error('Yapay zeka dönüşüm isteği sırasında hata:', error);
-                outputArea.textContent = "İstek gönderilirken bir hata oluştu. Lütfen ağ bağlantınızı kontrol edin.";
-            } finally {
-                loadingSpinner.style.display = 'none'; // Yükleniyor spinner'ını gizle
-                buttonsInSection.forEach(btn => btn.disabled = false); // Tüm butonları tekrar etkinleştir
-            }
-        });
-    });
 });
 </script>
 </body>
