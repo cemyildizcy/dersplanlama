@@ -264,37 +264,6 @@
             color: var(--primary-color);
         }
 
-        /* Özel Notlar Stili */
-        .private-note-section {
-            background-color: #f8f9fa; /* Açık gri */
-            border-radius: 10px;
-            padding: 1rem;
-            margin-top: 1rem;
-            border: 1px solid #e9ecef;
-        }
-        .private-note-section textarea {
-            min-height: 80px;
-            margin-bottom: 0.5rem;
-        }
-        .btn-note-save {
-            background-color: #20c997; /* Turkuaz yeşili */
-            border-color: #20c997;
-            color: white;
-        }
-        .btn-note-save:hover {
-            background-color: #17a67c;
-            border-color: #159a72;
-        }
-        .btn-note-delete {
-            background-color: #dc3545; /* Kırmızı */
-            border-color: #dc3545;
-            color: white;
-        }
-        .btn-note-delete:hover {
-            background-color: #c82333;
-            border-color: #bd2130;
-        }
-
         /* Önerilen İçerikler Stili */
         .recommendation-card {
             background-color: #e6f7ff; /* Açık mavi */
@@ -325,6 +294,36 @@
         }
         .recommendation-card .list-group-item:last-child {
             margin-bottom: 0;
+        }
+
+        /* AI İçerik Araçları Stili */
+        .ai-content-tools-section {
+            background-color: #f0f8ff; /* Çok açık mavi */
+            border-radius: 10px;
+            padding: 1rem;
+            margin-top: 1rem;
+            border: 1px solid #cceeff;
+        }
+        .ai-content-tools-section .btn {
+            font-size: 0.9rem;
+            padding: 0.6rem 0.8rem;
+        }
+        .ai-content-tools-section .ai-output-area {
+            background-color: #ffffff;
+            border: 1px solid #cceeff;
+            border-radius: 8px;
+            padding: 0.8rem;
+            min-height: 80px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 1rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.9rem;
+            color: #333;
+        }
+        .ai-content-tools-section .loading-spinner {
+            margin-top: 0.8rem;
         }
 
 
@@ -424,11 +423,11 @@
 
     {# Önerilen İçerikler Kartı #}
     {# recommended_alt_basliks listesi boş olsa bile kartı gösteriyoruz, böylece neden boş olduğunu anlayabiliriz. #}
-    {% if recommended_alt_basliks is not none %} {# None kontrolü eklendi #}
+    {% if recommended_alt_basliks is not none %}
         <div class="recommendation-card mb-4">
             <h5 class="card-title"><i class="bi bi-lightbulb-fill me-2"></i>Sizin İçin Önerilen İçerikler</h5>
             <ul class="list-group list-group-flush">
-                {% if recommended_alt_basliks %} {# Öneri varsa listeyi göster #}
+                {% if recommended_alt_basliks %}
                     {% for rec_ab in recommended_alt_basliks %}
                         <a href="{{ url_for('user_panel', ders_id=rec_ab.konu.ders_id, konu_id=rec_ab.konu_id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                             <div>
@@ -438,7 +437,7 @@
                             <i class="bi bi-arrow-right-circle-fill"></i>
                         </a>
                     {% endfor %}
-                {% else %} {# Öneri yoksa mesaj göster #}
+                {% else %}
                     <li class="list-group-item text-muted text-center">Şu an için size özel bir öneri bulunmuyor. Belki tüm dersleri tamamladınız veya yeni içerik bekliyor!</li>
                 {% endif %}
             </ul>
@@ -533,21 +532,36 @@
                                     </form>
                                 </div>
                             </li>
-                            {# Özel Notlar Bölümü #}
-                            <li class="list-group-item private-note-section">
-                                <h6 class="mb-2" style="color: var(--primary-color); font-weight: 600;"><i class="bi bi-journal-text me-1"></i> Özel Notlarım</h6>
-                                <form action="{{ url_for('save_note') }}" method="post">
-                                    <input type="hidden" name="alt_baslik_id" value="{{ alt_baslik.id }}">
-                                    <input type="hidden" name="selected_ders_id" value="{{ selected_ders.id if selected_ders else '' }}">
-                                    <input type="hidden" name="selected_konu_id" value="{{ selected_konu.id if selected_konu else '' }}">
-                                    <textarea class="form-control" name="note_content" rows="3" placeholder="Bu alt başlık için özel notlarınızı buraya yazın...">{{ private_notes_map.get(alt_baslik.id, '') }}</textarea>
-                                    <div class="d-flex justify-content-end gap-2 mt-2">
-                                        <button type="submit" class="btn btn-sm btn-note-save">Notu Kaydet</button>
-                                        {% if private_notes_map.get(alt_baslik.id) %}
-                                            <button type="submit" class="btn btn-sm btn-note-delete" name="note_content" value="" onclick="return confirm('Notunuzu silmek istediğinize emin misiniz?')">Notu Sil</button>
-                                        {% endif %}
+                            {# AI Destekli İçerik Araçları Bölümü #}
+                            <li class="list-group-item ai-content-tools-section">
+                                <h6 class="mb-2" style="color: var(--primary-color); font-weight: 600;"><i class="bi bi-magic me-1"></i> Akıllı İçerik Araçları</h6>
+                                {% if not alt_baslik.notlar %}
+                                    <div class="alert alert-warning py-2 small">Bu alt başlık için ders notu bulunamadı. Lütfen önce not ekleyin.</div>
+                                {% else %}
+                                    <div class="d-flex flex-wrap gap-2 mb-3">
+                                        <button type="button" class="btn btn-sm btn-info ai-transform-button" data-transform-type="podcast" data-alt-baslik-id="{{ alt_baslik.id }}">
+                                            <i class="bi bi-mic-fill me-1"></i> Podcast Metni Oluştur
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-info ai-transform-button" data-transform-type="summarize" data-alt-baslik-id="{{ alt_baslik.id }}">
+                                            <i class="bi bi-file-text-fill me-1"></i> Özetle
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-info ai-transform-button" data-transform-type="simplify" data-alt-baslik-id="{{ alt_baslik.id }}">
+                                            <i class="bi bi-lightbulb-fill me-1"></i> Basit Dille Açıkla
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-info ai-transform-button" data-transform-type="keywords" data-alt-baslik-id="{{ alt_baslik.id }}">
+                                            <i class="bi bi-key-fill me-1"></i> Anahtar Kavramlar
+                                        </button>
                                     </div>
-                                </form>
+                                    <div class="loading-spinner" id="aiTransformLoadingSpinner-{{ alt_baslik.id }}">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Yükleniyor...</span>
+                                        </div>
+                                        <p class="text-muted mt-1 small">Yapay zeka içeriği dönüştürüyor...</p>
+                                    </div>
+                                    <div class="ai-output-area" id="aiTransformOutput-{{ alt_baslik.id }}">
+                                        Dönüştürülen içerik burada görünecektir.
+                                    </div>
+                                {% endif %}
                             </li>
                         {% else %}
                             <li class="list-group-item text-muted">Bu konu için henüz alt başlık eklenmemiş.</li>
@@ -569,7 +583,7 @@ var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
   return new bootstrap.Tooltip(tooltipTriggerEl)
 })
 
-// Yapay Zeka Asistanı JavaScript Mantığı
+// Yapay Zeka Asistanı JavaScript Mantığı (Global Asistan)
 document.addEventListener('DOMContentLoaded', function() {
     const askAiButton = document.getElementById('askAiButton');
     const aiQuestionInput = document.getElementById('aiQuestion');
@@ -613,6 +627,50 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // AI Destekli İçerik Araçları JavaScript Mantığı (Alt Başlık Bazlı)
+    document.querySelectorAll('.ai-transform-button').forEach(button => {
+        button.addEventListener('click', async function() {
+            const altBaslikId = this.dataset.altBaslikId;
+            const transformType = this.dataset.transformType;
+            const outputArea = document.getElementById(`aiTransformOutput-${altBaslikId}`);
+            const loadingSpinner = document.getElementById(`aiTransformLoadingSpinner-${altBaslikId}`);
+            const buttonsInSection = this.closest('.ai-content-tools-section').querySelectorAll('.ai-transform-button');
+
+            if (!altBaslikId || !transformType) {
+                outputArea.textContent = "Hata: Eksik bilgi.";
+                return;
+            }
+
+            outputArea.textContent = ""; // Önceki cevabı temizle
+            loadingSpinner.style.display = 'block'; // Yükleniyor spinner'ını göster
+            buttonsInSection.forEach(btn => btn.disabled = true); // Tüm butonları devre dışı bırak
+
+            try {
+                const response = await fetch('/ai_transform_note', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ alt_baslik_id: altBaslikId, transform_type: transformType })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    outputArea.textContent = data.transformed_content;
+                } else {
+                    outputArea.textContent = "Hata: " + (data.error || "İçerik dönüştürülemedi.");
+                }
+            } catch (error) {
+                console.error('Yapay zeka dönüşüm isteği sırasında hata:', error);
+                outputArea.textContent = "İstek gönderilirken bir hata oluştu. Lütfen ağ bağlantınızı kontrol edin.";
+            } finally {
+                loadingSpinner.style.display = 'none'; // Yükleniyor spinner'ını gizle
+                buttonsInSection.forEach(btn => btn.disabled = false); // Tüm butonları tekrar etkinleştir
+            }
+        });
+    });
 });
 </script>
 </body>

@@ -1,6 +1,6 @@
 # Gerekli kütüphaneleri ve modülleri import ediyoruz
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify, current_app # current_app eklendi
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -51,7 +51,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     expire_date = db.Column(db.DateTime)
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade="all, delete-orphan")
-    private_notes = db.relationship('PrivateNote', backref='user', lazy=True, cascade="all, delete-orphan")
+    # private_notes ilişkisi kaldırıldı
 
 
 class Ders(db.Model):
@@ -73,7 +73,7 @@ class AltBaslik(db.Model):
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
-    private_notes = db.relationship('PrivateNote', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
+    # private_notes ilişkisi kaldırıldı
 
 class UserProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -106,18 +106,19 @@ class Material(db.Model):
     def __repr__(self):
         return f'<Material {self.original_filename}>'
 
-class PrivateNote(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
-    note_content = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+# PrivateNote modeli kaldırıldı
+# class PrivateNote(db.Model):
+#     id = db.Column(db.Integer, primary_key=True)
+#     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+#     alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
+#     note_content = db.Column(db.Text, nullable=True)
+#     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+#     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint('user_id', 'alt_baslik_id', name='_user_alt_baslik_note_uc'),)
+#     __table_args__ = (UniqueConstraint('user_id', 'alt_baslik_id', name='_user_alt_baslik_note_uc'),)
 
-    def __repr__(self):
-        return f'<PrivateNote UserID: {self.user_id}, AltBaslikID: {self.alt_baslik_id}>'
+#     def __repr__(self):
+#         return f'<PrivateNote UserID: {self.user_id}, AltBaslikID: {self.alt_baslik_id}>'
 
 
 # --- YARDIMCI FONKSİYONLAR (Devamı) ---
@@ -376,7 +377,7 @@ def admin_panel():
 @app.route("/panel", methods=["GET"])
 @login_required
 def user_panel():
-    current_app.logger.debug("--- user_panel fonksiyonu çağrıldı ---") # DEBUG: Fonksiyonun çağrıldığını göster
+    current_app.logger.debug("--- user_panel fonksiyonu çağrıldı ---")
 
     dersler = Ders.query.order_by(Ders.name).all()
     
@@ -400,53 +401,54 @@ def user_panel():
     if user:
         progress_records = UserProgress.query.filter_by(user_id=user.id).all()
         completed_alt_baslik_ids = {p.alt_baslik_id for p in progress_records}
-    current_app.logger.debug(f"DEBUG: Kullanıcının tamamladığı alt başlık ID'leri: {completed_alt_baslik_ids}") # DEBUG
+    current_app.logger.debug(f"DEBUG: Kullanıcının tamamladığı alt başlık ID'leri: {completed_alt_baslik_ids}")
 
-    private_notes_map = {}
-    if user and selected_konu:
-        for alt_baslik in selected_konu.alt_basliklar:
-            note = PrivateNote.query.filter_by(user_id=user.id, alt_baslik_id=alt_baslik.id).first()
-            if note:
-                private_notes_map[alt_baslik.id] = note.note_content
-    current_app.logger.debug(f"DEBUG: Kullanıcının özel notları: {private_notes_map.keys()}") # DEBUG
+    # private_notes_map kaldırıldı
+    # private_notes_map = {}
+    # if user and selected_konu:
+    #     for alt_baslik in selected_konu.alt_basliklar:
+    #         note = PrivateNote.query.filter_by(user_id=user.id, alt_baslik_id=alt_baslik.id).first()
+    #         if note:
+    #             private_notes_map[alt_baslik.id] = note.note_content
+    # current_app.logger.debug(f"DEBUG: Kullanıcının özel notları: {private_notes_map.keys()}")
 
 
     # Kişiselleştirilmiş İçerik Önerileri
     recommended_alt_basliks = []
     if user:
         all_alt_basliks = AltBaslik.query.all()
-        current_app.logger.debug(f"DEBUG: Toplam alt başlık sayısı: {len(all_alt_basliks)}") # DEBUG
+        current_app.logger.debug(f"DEBUG: Toplam alt başlık sayısı: {len(all_alt_basliks)}")
         
         uncompleted_alt_basliks = [
             ab for ab in all_alt_basliks 
             if ab.id not in completed_alt_baslik_ids
         ]
-        current_app.logger.debug(f"DEBUG: Tamamlanmamış alt başlık sayısı: {len(uncompleted_alt_basliks)}") # DEBUG
+        current_app.logger.debug(f"DEBUG: Tamamlanmamış alt başlık sayısı: {len(uncompleted_alt_basliks)}")
 
         if selected_konu:
-            current_app.logger.debug(f"DEBUG: Seçili konu: {selected_konu.name}") # DEBUG
+            current_app.logger.debug(f"DEBUG: Seçili konu: {selected_konu.name}")
             found_next_in_selected_konu = False
             for ab in selected_konu.alt_basliklar:
                 if ab.id not in completed_alt_baslik_ids:
                     recommended_alt_basliks.append(ab)
                     found_next_in_selected_konu = True
-                    current_app.logger.debug(f"DEBUG: Seçili konuda ilk tamamlanmamış öneri: {ab.name}") # DEBUG
+                    current_app.logger.debug(f"DEBUG: Seçili konuda ilk tamamlanmamış öneri: {ab.name}")
                     break
             
             if not found_next_in_selected_konu and uncompleted_alt_basliks:
                 num_to_sample = min(len(uncompleted_alt_basliks), 3)
                 if num_to_sample > 0:
                     recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
-                    current_app.logger.debug(f"DEBUG: Seçili konuda başka yok, genelden rastgele {num_to_sample} öneri eklendi.") # DEBUG
+                    current_app.logger.debug(f"DEBUG: Seçili konuda başka yok, genelden rastgele {num_to_sample} öneri eklendi.")
         elif uncompleted_alt_basliks:
             num_to_sample = min(len(uncompleted_alt_basliks), 3)
             if num_to_sample > 0:
                 recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
-                current_app.logger.debug(f"DEBUG: Hiç konu seçili değil, genelden rastgele {num_to_sample} öneri eklendi.") # DEBUG
+                current_app.logger.debug(f"DEBUG: Hiç konu seçili değil, genelden rastgele {num_to_sample} öneri eklendi.")
         else:
-            current_app.logger.debug("DEBUG: Tamamlanmamış alt başlık bulunamadı, öneri yok.") # DEBUG
+            current_app.logger.debug("DEBUG: Tamamlanmamış alt başlık bulunamadı, öneri yok.")
     else:
-        current_app.logger.debug("DEBUG: Kullanıcı oturumu yok veya tamamlanmamış alt başlık bulunamadı.") # DEBUG
+        current_app.logger.debug("DEBUG: Kullanıcı oturumu yok veya tamamlanmamış alt başlık bulunamadı.")
     
     unique_recommended_alt_basliks = []
     seen_ids = set()
@@ -454,7 +456,7 @@ def user_panel():
         if ab.id not in seen_ids:
             unique_recommended_alt_basliks.append(ab)
             seen_ids.add(ab.id)
-    current_app.logger.debug(f"DEBUG: Son önerilen alt başlıklar ({len(unique_recommended_alt_basliks)} adet): {[ab.name for ab in unique_recommended_alt_basliks]}") # DEBUG
+    current_app.logger.debug(f"DEBUG: Son önerilen alt başlıklar ({len(unique_recommended_alt_basliks)} adet): {[ab.name for ab in unique_recommended_alt_basliks]}")
 
 
     completion_percentage = 0
@@ -477,7 +479,7 @@ def user_panel():
                            completed_alt_baslik_ids=completed_alt_baslik_ids,
                            completion_percentage=completion_percentage,
                            active_announcements=active_announcements,
-                           private_notes_map=private_notes_map,
+                           # private_notes_map kaldırıldı
                            recommended_alt_basliks=unique_recommended_alt_basliks)
 
 
@@ -513,6 +515,125 @@ def mark_completed():
     return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
 
 
+# save_note rotası kaldırıldı
+# @app.route("/save_note", methods=["POST"])
+# @login_required
+# def save_note():
+#     alt_baslik_id = request.form.get("alt_baslik_id", type=int)
+#     note_content = request.form.get("note_content", "").strip()
+#     user_id = session.get("user_id")
+
+#     if not alt_baslik_id or not user_id:
+#         flash("Geçersiz istek.", "danger")
+#         return redirect(url_for('user_panel'))
+    
+#     private_note = PrivateNote.query.filter_by(user_id=user_id, alt_baslik_id=alt_baslik_id).first()
+
+#     if private_note:
+#         if note_content:
+#             private_note.note_content = note_content
+#             private_note.updated_at = datetime.utcnow()
+#             db.session.commit()
+#             flash("Notunuz başarıyla güncellendi.", "success")
+#         else:
+#             db.session.delete(private_note)
+#             db.session.commit()
+#             flash("Notunuz başarıyla silindi.", "info")
+#     else:
+#         if note_content:
+#             new_note = PrivateNote(user_id=user_id, alt_baslik_id=alt_baslik_id, note_content=note_content)
+#             db.session.add(new_note)
+#             db.session.commit()
+#             flash("Notunuz başarıyla kaydedildi.", "success")
+#         else:
+#             flash("Boş not kaydedilemez.", "warning")
+    
+#     selected_ders_id = request.form.get("selected_ders_id", type=int)
+#     selected_konu_id = request.form.get("selected_konu_id", type=int)
+#     return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
+
+# --- AI Destekli İçerik Dönüştürme Rotası ---
+@app.route("/ai_transform_note", methods=["POST"])
+@login_required
+def ai_transform_note():
+    # request.json.get() metodu 'type' parametresini almaz.
+    # ID'nin int olduğundan emin olmak için manuel olarak dönüştürüyoruz.
+    alt_baslik_id = request.json.get("alt_baslik_id") 
+    if alt_baslik_id is not None: # None kontrolü eklendi
+        alt_baslik_id = int(alt_baslik_id)
+    
+    transform_type = request.json.get("transform_type")
+
+    current_app.logger.debug(f"DEBUG: /ai_transform_note çağrıldı. alt_baslik_id: {alt_baslik_id}, transform_type: {transform_type}") # DEBUG
+
+    if alt_baslik_id is None or not transform_type: # None kontrolü güncellendi
+        current_app.logger.error("HATA: /ai_transform_note - Geçersiz istek: Alt başlık ID'si veya dönüşüm türü eksik.") # Loglama
+        return jsonify({"error": "Geçersiz istek: Alt başlık ID'si veya dönüşüm türü eksik."}), 400
+
+    alt_baslik = AltBaslik.query.get(alt_baslik_id)
+    if not alt_baslik:
+        current_app.logger.error(f"HATA: /ai_transform_note - Alt başlık bulunamadı. ID: {alt_baslik_id}") # Loglama
+        return jsonify({"error": "Alt başlık bulunamadı."}), 404
+    
+    if not alt_baslik.notlar:
+        current_app.logger.warning(f"UYARI: /ai_transform_note - Alt başlık için not içeriği bulunamadı. ID: {alt_baslik_id}") # Loglama
+        return jsonify({"error": "Bu alt başlık için ders notu bulunamadı. Lütfen önce not ekleyin."}), 404
+    
+    note_content = alt_baslik.notlar
+    prompt_text = ""
+
+    if transform_type == "podcast":
+        prompt_text = f"Aşağıdaki ders notlarını 2-3 dakikalık bir podcast metnine dönüştür. Giriş, ana içerik ve kapanış kısımları olsun. Metin akıcı ve dinleyici dostu olsun:\n\n{note_content}"
+    elif transform_type == "summarize":
+        prompt_text = f"Aşağıdaki ders notlarını ana fikirleri ve önemli noktaları içeren kısa ve öz bir özet haline getir:\n\n{note_content}"
+    elif transform_type == "simplify":
+        prompt_text = f"Aşağıdaki karmaşık ders notlarını, konuya yeni başlayan birinin kolayca anlayabileceği basit ve anlaşılır bir dille yeniden yaz:\n\n{note_content}"
+    elif transform_type == "keywords":
+        prompt_text = f"Aşağıdaki ders notlarındaki en önemli 5-10 anahtar kavramı ve kısa tanımlarını liste halinde çıkar:\n\n{note_content}"
+    else:
+        current_app.logger.error(f"HATA: /ai_transform_note - Geçersiz dönüşüm türü: {transform_type}") # Loglama
+        return jsonify({"error": "Geçersiz dönüşüm türü."}), 400
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        current_app.logger.error("HATA: GEMINI_API_KEY ortam değişkeni ayarlanmamış.")
+        return jsonify({"error": "Yapay zeka asistanı yapılandırma hatası: API anahtarı eksik."}), 500
+
+    chat_history = []
+    chat_history.append({"role": "user", "parts": [{"text": prompt_text}]})
+    
+    payload = {
+        "contents": chat_history,
+        "generationConfig": {
+            "temperature": 0.7,
+            "topK": 40,
+            "topP": 0.95,
+            "maxOutputTokens": 1000
+        }
+    }
+    
+    apiUrl = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+
+    try:
+        response = requests.post(apiUrl, json=payload, headers={'Content-Type': 'application/json'})
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get("candidates") and result["candidates"][0].get("content") and result["candidates"][0]["content"].get("parts"):
+            ai_response = result["candidates"][0]["content"]["parts"][0]["text"]
+            return jsonify({"transformed_content": ai_response})
+        else:
+            current_app.logger.debug(f"DEBUG: AI'dan beklenen formatta dönüşüm cevabı gelmedi: {result}")
+            return jsonify({"error": "Yapay zeka dönüşüm cevabı alınamadı. Lütfen daha sonra tekrar deneyin."}), 500
+    except requests.exceptions.RequestException as e:
+        current_app.logger.error(f"HATA: Gemini API dönüşüm çağrısı sırasında hata oluştu: {e}")
+        return jsonify({"error": f"Yapay zeka ile iletişim hatası: {e}"}), 500
+    except Exception as e:
+        current_app.logger.error(f"HATA: Beklenmeyen bir hata oluştu: {e}")
+        return jsonify({"error": f"Beklenmeyen bir hata oluştu: {e}"}), 500
+
+
+# --- Profil ve İndirme Rotları ---
 @app.route("/profile", methods=["GET", "POST"])
 @login_required
 def profile():
@@ -565,8 +686,7 @@ def download_file(filename):
     
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True, download_name=material.original_filename)
 
-# --- DÜZENLEME ROTLARI ---
-
+# --- Düzenleme Rotları (Mevcut) ---
 @app.route("/admin/edit_ders/<int:ders_id>", methods=["GET", "POST"])
 @login_required
 @admin_required
@@ -651,89 +771,6 @@ def edit_alt_baslik(alt_baslik_id):
                 return redirect(url_for('admin_panel'))
         return redirect(url_for('edit_alt_baslik', alt_baslik_id=alt_baslik.id))
     return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler)
-
-@app.route("/ask_ai", methods=["POST"])
-@login_required
-def ask_ai():
-    user_question = request.json.get("question")
-    if not user_question:
-        return jsonify({"error": "Soru boş olamaz."}), 400
-
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        current_app.logger.error("HATA: GEMINI_API_KEY ortam değişkeni ayarlanmamış.") # Loglama
-        return jsonify({"error": "Yapay zeka asistanı yapılandırma hatası: API anahtarı eksik."}), 500
-
-    chat_history = []
-    chat_history.append({"role": "user", "parts": [{"text": user_question}]})
-    
-    payload = {
-        "contents": chat_history,
-        "generationConfig": {
-            "temperature": 0.7,
-            "topK": 40,
-            "topP": 0.95,
-            "maxOutputTokens": 800
-        }
-    }
-    
-    apiUrl = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-
-    try:
-        response = requests.post(apiUrl, json=payload, headers={'Content-Type': 'application/json'})
-        response.raise_for_status()
-        result = response.json()
-
-        if result.get("candidates") and result["candidates"][0].get("content") and result["candidates"][0]["content"].get("parts"):
-            ai_response = result["candidates"][0]["content"]["parts"][0]["text"]
-            return jsonify({"answer": ai_response})
-        else:
-            current_app.logger.debug(f"DEBUG: AI'dan beklenen formatta cevap gelmedi: {result}") # Loglama
-            return jsonify({"error": "Yapay zeka cevabı alınamadı. Lütfen daha sonra tekrar deneyin."}), 500
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"HATA: Gemini API çağrısı sırasında hata oluştu: {e}") # Loglama
-        return jsonify({"error": f"Yapay zeka ile iletişim hatası: {e}"}), 500
-    except Exception as e:
-        current_app.logger.error(f"HATA: Beklenmeyen bir hata oluştu: {e}") # Loglama
-        return jsonify({"error": f"Beklenmeyen bir hata oluştu: {e}"}), 500
-
-
-# --- Not Kaydetme/Silme Rotları ---
-@app.route("/save_note", methods=["POST"])
-@login_required
-def save_note():
-    alt_baslik_id = request.form.get("alt_baslik_id", type=int)
-    note_content = request.form.get("note_content", "").strip()
-    user_id = session.get("user_id")
-
-    if not alt_baslik_id or not user_id:
-        flash("Geçersiz istek.", "danger")
-        return redirect(url_for('user_panel'))
-    
-    private_note = PrivateNote.query.filter_by(user_id=user_id, alt_baslik_id=alt_baslik_id).first()
-
-    if private_note:
-        if note_content:
-            private_note.note_content = note_content
-            private_note.updated_at = datetime.utcnow()
-            db.session.commit()
-            flash("Notunuz başarıyla güncellendi.", "success")
-        else:
-            db.session.delete(private_note)
-            db.session.commit()
-            flash("Notunuz başarıyla silindi.", "info")
-    else:
-        if note_content:
-            new_note = PrivateNote(user_id=user_id, alt_baslik_id=alt_baslik_id, note_content=note_content)
-            db.session.add(new_note)
-            db.session.commit()
-            flash("Notunuz başarıyla kaydedildi.", "success")
-        else:
-            flash("Boş not kaydedilemez.", "warning")
-    
-    selected_ders_id = request.form.get("selected_ders_id", type=int)
-    selected_konu_id = request.form.get("selected_konu_id", type=int)
-    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
 
 
 # Lokalde çalıştırmak için `if __name__` bloğu aynı kalıyor
