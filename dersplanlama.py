@@ -42,7 +42,7 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# --- VERİTABANI MODELLERİ ---
+# --- VERITABANI MODELLERİ ---
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,7 +51,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     expire_date = db.Column(db.DateTime)
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade="all, delete-orphan")
-    # private_notes ilişkisi kaldırıldı
+    # PrivateNote ilişkisi kaldırıldı: private_notes = db.relationship('PrivateNote', backref='user', lazy=True, cascade="all, delete-orphan")
 
 
 class Ders(db.Model):
@@ -73,7 +73,7 @@ class AltBaslik(db.Model):
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
-    # private_notes ilişkisi kaldırıldı
+    # PrivateNote ilişkisi kaldırıldı: private_notes = db.relationship('PrivateNote', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
 
 class UserProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -559,24 +559,24 @@ def ai_transform_note():
     # request.json.get() metodu 'type' parametresini almaz.
     # ID'nin int olduğundan emin olmak için manuel olarak dönüştürüyoruz.
     alt_baslik_id = request.json.get("alt_baslik_id") 
-    if alt_baslik_id is not None: # None kontrolü eklendi
+    if alt_baslik_id is not None:
         alt_baslik_id = int(alt_baslik_id)
     
     transform_type = request.json.get("transform_type")
 
-    current_app.logger.debug(f"DEBUG: /ai_transform_note çağrıldı. alt_baslik_id: {alt_baslik_id}, transform_type: {transform_type}") # DEBUG
+    current_app.logger.debug(f"DEBUG: /ai_transform_note çağrıldı. alt_baslik_id: {alt_baslik_id}, transform_type: {transform_type}")
 
-    if alt_baslik_id is None or not transform_type: # None kontrolü güncellendi
-        current_app.logger.error("HATA: /ai_transform_note - Geçersiz istek: Alt başlık ID'si veya dönüşüm türü eksik.") # Loglama
+    if alt_baslik_id is None or not transform_type:
+        current_app.logger.error("HATA: /ai_transform_note - Geçersiz istek: Alt başlık ID'si veya dönüşüm türü eksik.")
         return jsonify({"error": "Geçersiz istek: Alt başlık ID'si veya dönüşüm türü eksik."}), 400
 
     alt_baslik = AltBaslik.query.get(alt_baslik_id)
     if not alt_baslik:
-        current_app.logger.error(f"HATA: /ai_transform_note - Alt başlık bulunamadı. ID: {alt_baslik_id}") # Loglama
+        current_app.logger.error(f"HATA: /ai_transform_note - Alt başlık bulunamadı. ID: {alt_baslik_id}")
         return jsonify({"error": "Alt başlık bulunamadı."}), 404
     
     if not alt_baslik.notlar:
-        current_app.logger.warning(f"UYARI: /ai_transform_note - Alt başlık için not içeriği bulunamadı. ID: {alt_baslik_id}") # Loglama
+        current_app.logger.warning(f"UYARI: /ai_transform_note - Alt başlık için not içeriği bulunamadı. ID: {alt_baslik_id}")
         return jsonify({"error": "Bu alt başlık için ders notu bulunamadı. Lütfen önce not ekleyin."}), 404
     
     note_content = alt_baslik.notlar
@@ -591,7 +591,7 @@ def ai_transform_note():
     elif transform_type == "keywords":
         prompt_text = f"Aşağıdaki ders notlarındaki en önemli 5-10 anahtar kavramı ve kısa tanımlarını liste halinde çıkar:\n\n{note_content}"
     else:
-        current_app.logger.error(f"HATA: /ai_transform_note - Geçersiz dönüşüm türü: {transform_type}") # Loglama
+        current_app.logger.error(f"HATA: /ai_transform_note - Geçersiz dönüşüm türü: {transform_type}")
         return jsonify({"error": "Geçersiz dönüşüm türü."}), 400
 
     api_key = os.environ.get("GEMINI_API_KEY")
