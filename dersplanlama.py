@@ -9,8 +9,6 @@ from functools import wraps
 from sqlalchemy import UniqueConstraint
 from werkzeug.utils import secure_filename # Güvenli dosya adı için
 from sqlalchemy import func # SQL fonksiyonları için (örn. count)
-# requests modülü kaldırıldı (AI Asistanı kaldırıldığı için artık gerek yok)
-# random modülü kaldırıldı (Kişiselleştirilmiş öneriler kaldırıldığı için artık gerek yok)
 
 # --- UYGULAMA VE VERİTABANI KURULUMU ---
 
@@ -18,6 +16,7 @@ app = Flask(__name__)
 
 # Güvenli konfigürasyon: Ayarları ortam değişkenlerinden alıyoruz
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'varsayilan_cok_gizli_bir_anahtar_12345')
+# Yerel geliştirme için SQLite kullan, yayın ortamı için DATABASE_URL ortam değişkenini kullan
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///dersplanlama.db')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -51,7 +50,8 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     expire_date = db.Column(db.DateTime)
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade="all, delete-orphan")
-
+    comments = db.relationship('Comment', backref='user_rel', lazy=True, cascade="all, delete-orphan")
+    quiz_attempts = db.relationship('UserQuizAttempt', backref='user_rel', lazy=True, cascade="all, delete-orphan")
 
 class Ders(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -72,6 +72,8 @@ class AltBaslik(db.Model):
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
+    quiz = db.relationship('Quiz', backref='alt_baslik_rel', lazy=True, uselist=False, cascade="all, delete-orphan")
+    comments = db.relationship('Comment', backref='alt_baslik_rel', lazy=True, cascade="all, delete-orphan")
 
 class UserProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -104,8 +106,60 @@ class Material(db.Model):
     def __repr__(self):
         return f'<Material {self.original_filename}>'
 
+class Quiz(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
+    questions = db.relationship('Question', backref='quiz', lazy=True, cascade="all, delete-orphan")
 
-# --- YARDIMCI FONKSİYONLAR (Devamı) ---
+    def __repr__(self):
+        return f'<Quiz {self.title}>'
+
+class Question(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), nullable=False)
+    question_text = db.Column(db.Text, nullable=False) 
+    answers = db.relationship('Answer', backref='question', lazy=True, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f'<Question {self.question_text[:50]}...>'
+
+class Answer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
+    answer_text = db.Column(db.Text, nullable=False) 
+    is_correct = db.Column(db.Boolean, default=False, nullable=False)
+
+    def __repr__(self):
+        return f'<Answer {self.answer_text[:50]}...>'
+
+class UserQuizAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), nullable=False)
+    score = db.Column(db.Integer, nullable=False)
+    attempt_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('user_id', 'quiz_id', name='_user_quiz_uc'),)
+
+    def __repr__(self):
+        return f'<UserQuizAttempt UserID: {self.user_id}, QuizID: {self.quiz_id}, Score: {self.score}>'
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    parent_comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), nullable=True)
+
+    replies = db.relationship('Comment', backref=db.backref('parent_comment_rel', remote_side=[id]), lazy=True, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f'<Comment by {self.user_id} on AltBaslik {self.alt_baslik_id}: {self.content[:50]}...>'
+
+
+# --- YARDIMCI FONKSİYONLAR ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -134,9 +188,14 @@ def login():
         user = User.query.filter_by(username=username).first()
 
         if user and check_password_hash(user.password, password):
-            if user.expire_date and datetime.utcnow() >= (user.expire_date + timedelta(days=1)):
-                flash(f"Erişim süreniz {user.expire_date.strftime('%Y-%m-%d')} tarihinde dolmuştur. Lütfen yöneticinizle iletişime geçin.", "danger")
-                return redirect(url_for('login'))
+            # Erişim süresi kontrolü
+            if user.expire_date:
+                # current_app.logger.debug(f"User expire date: {user.expire_date}, UTC now: {datetime.utcnow()}")
+                # datetime.utcnow() ile karşılaştırma yaparken bir günlük tolerans ekleyebiliriz
+                # Böylece bitiş günü dahil erişim sağlanır
+                if datetime.utcnow() >= (user.expire_date + timedelta(days=1)):
+                    flash(f"Erişim süreniz {user.expire_date.strftime('%Y-%m-%d')} tarihinde dolmuştur. Lütfen yöneticinizle iletişime geçin.", "danger")
+                    return redirect(url_for('login'))
             
             session['user_id'] = user.id
             session['username'] = user.username
@@ -167,7 +226,7 @@ def admin_panel():
         delete_type = request.form.get("delete_type")
         delete_id = request.form.get("id", type=int)
         
-        current_app.logger.debug(f"DEBUG: Silme isteği alındı. Tür: {delete_type}, ID: {delete_id}, Admin mi: {session.get('is_admin')}, Ana Admin mi: {is_main_admin}")
+        # current_app.logger.debug(f"DEBUG: Silme isteği alındı. Tür: {delete_type}, ID: {delete_id}, Admin mi: {session.get('is_admin')}, Ana Admin mi: {is_main_admin}")
 
         if delete_type and delete_id:
             item_to_delete = None
@@ -182,14 +241,16 @@ def admin_panel():
                     item_to_delete = User.query.get_or_404(delete_id)
                 elif delete_type == "announcement": 
                     item_to_delete = Announcement.query.get_or_404(delete_id)
+                elif delete_type == "quiz":
+                    item_to_delete = Quiz.query.get_or_404(delete_id)
                 elif delete_type == "material": 
                     material_to_delete = Material.query.get_or_404(delete_id)
                     file_path = os.path.join(app.config['UPLOAD_FOLDER'], material_to_delete.filename)
-                    current_app.logger.debug(f"DEBUG: Materyal dosyası silinmeye çalışılıyor: {file_path}")
+                    # current_app.logger.debug(f"DEBUG: Materyal dosyası silinmeye çalışılıyor: {file_path}")
                     if os.path.exists(file_path):
                         try:
                             os.remove(file_path)
-                            current_app.logger.debug(f"DEBUG: Dosya {file_path} başarıyla silindi.")
+                            # current_app.logger.debug(f"DEBUG: Dosya {file_path} başarıyla silindi.")
                         except OSError as e:
                             current_app.logger.error(f"HATA: Dosya silinirken hata oluştu {file_path}: {e}")
                             flash(f"Dosya silinirken bir hata oluştu: {e}", "danger")
@@ -198,17 +259,17 @@ def admin_panel():
                     item_to_delete = material_to_delete
                 
                 if item_to_delete:
-                    current_app.logger.debug(f"DEBUG: Silinecek öğe bulundu: {item_to_delete}")
+                    # current_app.logger.debug(f"DEBUG: Silinecek öğe bulundu: {item_to_delete}")
                     if delete_type == 'user' and item_to_delete.username == 'admin':
                         flash("Ana admin kullanıcısı silinemez.", "danger")
-                        current_app.logger.debug("DEBUG: Ana admin kullanıcısı silinmeye çalışıldı.")
+                        # current_app.logger.debug("DEBUG: Ana admin kullanıcısı silinmeye çalıştı.")
                     else:
                         db.session.delete(item_to_delete)
                         db.session.commit()
                         flash(f"{delete_type.capitalize()} başarıyla silindi.", "success")
-                        current_app.logger.debug(f"DEBUG: {delete_type.capitalize()} ID {delete_id} veritabanından başarıyla silindi.")
-                else:
-                    current_app.logger.debug(f"DEBUG: Silme için öğe bulunamadı. Tür: {delete_type}, ID: {delete_id}.")
+                        # current_app.logger.debug(f"DEBUG: {delete_type.capitalize()} ID {delete_id} veritabanından başarıyla silindi.")
+                # else:
+                    # current_app.logger.debug(f"DEBUG: Silme için öğe bulunamadı. Tür: {delete_type}, ID: {delete_id}.")
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.error(f"HATA: Silme işlemi sırasında beklenmeyen bir hata oluştu ({delete_type} ID {delete_id}): {e}")
@@ -228,7 +289,7 @@ def admin_panel():
                 expire_date = None
                 if access_days_str.isdigit():
                     days_to_add = int(access_days_str)
-                    if days_to_add > 0 and days_to_add <= 36500:
+                    if days_to_add > 0 and days_to_add <= 36500: # Max 100 yıl
                         expire_date = datetime.utcnow() + timedelta(days=days_to_add)
                     elif days_to_add <= 0:
                         flash("Erişim süresi pozitif bir sayı olmalıdır.", "danger")
@@ -236,7 +297,7 @@ def admin_panel():
                     else:
                         flash("Erişim süresi çok büyük. Lütfen daha küçük bir değer girin.", "danger")
                         return redirect(url_for('admin_panel'))
-                elif access_days_str:
+                elif access_days_str: # Sayısal olmayan ama boş olmayan giriş
                     flash("Erişim süresi sadece sayı içermelidir.", "danger")
                     return redirect(url_for('admin_panel'))
                 
@@ -324,12 +385,66 @@ def admin_panel():
                 flash("Geçersiz dosya türü veya dosya yüklenemedi.", "danger")
             return redirect(url_for('admin_panel'))
         
+        elif action == "add_quiz":
+            alt_baslik_id = request.form.get("alt_baslik_sec_quiz", type=int)
+            quiz_title = request.form.get("quiz_title", "").strip()
+            
+            question_texts = request.form.getlist("question_text[]")
+            
+            if not alt_baslik_id or not quiz_title or not question_texts:
+                flash("Quiz başlığı, alt başlık seçimi veya en az bir soru boş olamaz.", "danger")
+                return redirect(url_for('admin_panel'))
+
+            existing_quiz = Quiz.query.filter_by(alt_baslik_id=alt_baslik_id).first()
+            if existing_quiz:
+                flash("Bu alt başlık için zaten bir quiz mevcut. Lütfen mevcut quizi silin veya düzenleyin.", "danger")
+                return redirect(url_for('admin_panel'))
+
+            new_quiz = Quiz(title=quiz_title, alt_baslik_id=alt_baslik_id)
+            db.session.add(new_quiz)
+            db.session.flush() # new_quiz.id'ye erişmek için flush
+
+            for i, q_text in enumerate(question_texts):
+                if not q_text.strip():
+                    continue
+                new_question = Question(quiz_id=new_quiz.id, question_text=q_text.strip())
+                db.session.add(new_question)
+                db.session.flush()
+
+                answer_texts = request.form.getlist(f"answer_text_{i+1}[]")
+                correct_answer_index_str = request.form.get(f"correct_answer_{i+1}")
+                
+                if not answer_texts or correct_answer_index_str is None:
+                    flash(f"Soru {i+1} için cevaplar veya doğru cevap seçimi eksik.", "danger")
+                    db.session.rollback()
+                    return redirect(url_for('admin_panel'))
+                
+                try:
+                    correct_answer_index = int(correct_answer_index_str)
+                except ValueError:
+                    flash(f"Soru {i+1} için doğru cevap seçimi geçersiz.", "danger")
+                    db.session.rollback()
+                    return redirect(url_for('admin_panel'))
+
+
+                for j, a_text in enumerate(answer_texts):
+                    if not a_text.strip():
+                        continue
+                    is_correct = (j == correct_answer_index)
+                    new_answer = Answer(question_id=new_question.id, answer_text=a_text.strip(), is_correct=is_correct)
+                    db.session.add(new_answer)
+            
+            db.session.commit()
+            flash(f"'{quiz_title}' quizi başarıyla eklendi.", "success")
+            return redirect(url_for('admin_panel'))
+        
         flash("Geçersiz işlem veya eksik veri.", "danger")
         return redirect(url_for('admin_panel'))
 
     users = User.query.order_by(User.username).all()
     dersler = Ders.query.order_by(Ders.name).all()
-    announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
+    announcements = Announcement.query.filter_by(is_active=True).order_by(Announcement.created_at.desc()).all()
+
 
     total_users_count = User.query.count()
     active_users_count = User.query.filter(User.expire_date > datetime.utcnow()).count()
@@ -361,8 +476,7 @@ def admin_panel():
 @app.route("/panel", methods=["GET"])
 @login_required
 def user_panel():
-    current_app.logger.debug("--- user_panel fonksiyonu çağrıldı ---")
-
+    # current_app.logger.debug("--- user_panel fonksiyonu çağrıldı ---") # Yorum satırı yapıldı
     dersler = Ders.query.order_by(Ders.name).all()
     
     selected_ders_id = request.args.get('ders_id', type=int)
@@ -385,55 +499,9 @@ def user_panel():
     if user:
         progress_records = UserProgress.query.filter_by(user_id=user.id).all()
         completed_alt_baslik_ids = {p.alt_baslik_id for p in progress_records}
-    current_app.logger.debug(f"DEBUG: Kullanıcının tamamladığı alt başlık ID'leri: {completed_alt_baslik_ids}")
+    # current_app.logger.debug(f"DEBUG: Kullanıcının tamamladığı alt başlık ID'leri: {completed_alt_baslik_ids}") # Yorum satırı yapıldı
 
-    # Kişiselleştirilmiş İçerik Önerileri kaldırıldı
-    # recommended_alt_basliks = []
-    # if user:
-    #     all_alt_basliks = AltBaslik.query.all()
-    #     current_app.logger.debug(f"DEBUG: Toplam alt başlık sayısı: {len(all_alt_basliks)}")
-        
-    #     uncompleted_alt_basliks = [
-    #         ab for ab in all_alt_basliks 
-    #         if ab.id not in completed_alt_baslik_ids
-    #     ]
-    #     current_app.logger.debug(f"DEBUG: Tamamlanmamış alt başlık sayısı: {len(uncompleted_alt_basliks)}")
-
-    #     if selected_konu:
-    #         current_app.logger.debug(f"DEBUG: Seçili konu: {selected_konu.name}")
-    #         found_next_in_selected_konu = False
-    #         for ab in selected_konu.alt_basliklar:
-    #             if ab.id not in completed_alt_baslik_ids:
-    #                 recommended_alt_basliks.append(ab)
-    #                 found_next_in_selected_konu = True
-    #                 current_app.logger.debug(f"DEBUG: Seçili konuda ilk tamamlanmamış öneri: {ab.name}")
-    #                 break
-            
-    #         if not found_next_in_selected_konu and uncompleted_alt_basliks:
-    #             num_to_sample = min(len(uncompleted_alt_basliks), 3)
-    #             if num_to_sample > 0:
-    #                 recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
-    #                 current_app.logger.debug(f"DEBUG: Seçili konuda başka yok, genelden rastgele {num_to_sample} öneri eklendi.")
-    #     elif uncompleted_alt_basliks:
-    #         num_to_sample = min(len(uncompleted_alt_basliks), 3)
-    #         if num_to_sample > 0:
-    #             recommended_alt_basliks.extend(random.sample(uncompleted_alt_basliks, num_to_sample))
-    #             current_app.logger.debug(f"DEBUG: Hiç konu seçili değil, genelden rastgele {num_to_sample} öneri eklendi.")
-    #     else:
-    #         current_app.logger.debug("DEBUG: Tamamlanmamış alt başlık bulunamadı, öneri yok.")
-    # else:
-    #     current_app.logger.debug("DEBUG: Kullanıcı oturumu yok veya tamamlanmamış alt başlık bulunamadı.")
-    
-    # unique_recommended_alt_basliks = []
-    # seen_ids = set()
-    # for ab in recommended_alt_basliks:
-    #     if ab.id not in seen_ids:
-    #         unique_recommended_alt_basliks.append(ab)
-    #         seen_ids.add(ab.id)
-    # current_app.logger.debug(f"DEBUG: Son önerilen alt başlıklar ({len(unique_recommended_alt_basliks)} adet): {[ab.name for ab in unique_recommended_alt_basliks]}")
-
-    # recommended_alt_basliks artık template'e gönderilmeyecek
-    unique_recommended_alt_basliks = [] # Boş liste olarak kalacak
+    unique_recommended_alt_basliks = []
 
     completion_percentage = 0
     if selected_konu:
@@ -447,6 +515,10 @@ def user_panel():
 
     active_announcements = Announcement.query.filter_by(is_active=True).order_by(Announcement.created_at.desc()).all()
 
+    from sqlalchemy.orm import joinedload
+    # user_quiz_attempts = db.session.query(UserQuizAttempt).filter_by(user_id=session['user_id']).options(joinedload(UserQuizAttempt.quiz)).all() # Yorum satırı yapıldı
+    # user_quiz_attempts_map = {attempt.quiz_id: attempt for attempt in user_quiz_attempts} # Yorum satırı yapıldı
+
     return render_template('user.html', 
                            dersler=dersler, 
                            selected_ders=selected_ders, 
@@ -455,8 +527,10 @@ def user_panel():
                            completed_alt_baslik_ids=completed_alt_baslik_ids,
                            completion_percentage=completion_percentage,
                            active_announcements=active_announcements,
-                           recommended_alt_basliks=unique_recommended_alt_basliks) # Hala boş liste gönderiyoruz
-
+                           recommended_alt_basliks=unique_recommended_alt_basliks,
+                           UserQuizAttempt=UserQuizAttempt,
+                           session=session
+                           )
 
 @app.route("/mark_completed", methods=["POST"])
 @login_required
@@ -487,6 +561,115 @@ def mark_completed():
     
     selected_ders_id = request.form.get("selected_ders_id", type=int)
     selected_konu_id = request.form.get("selected_konu_id", type=int)
+    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
+
+@app.route("/submit_quiz", methods=["POST"])
+@login_required
+def submit_quiz():
+    user_id = session.get("user_id")
+    quiz_id = request.form.get("quiz_id", type=int)
+    alt_baslik_id = request.form.get("alt_baslik_id", type=int)
+    selected_ders_id = request.form.get("selected_ders_id", type=int)
+    selected_konu_id = request.form.get("selected_konu_id", type=int)
+
+    quiz = Quiz.query.get(quiz_id)
+    if not quiz:
+        flash("Quiz bulunamadı.", "danger")
+        return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
+
+    correct_answers_count = 0
+    total_questions = len(quiz.questions)
+
+    if total_questions == 0:
+        flash("Bu quizde soru bulunmamaktadır.", "warning")
+        return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
+
+    for question in quiz.questions:
+        selected_answer_id = request.form.get(f"question_{question.id}", type=int)
+        if selected_answer_id:
+            selected_answer = Answer.query.get(selected_answer_id)
+            if selected_answer and selected_answer.is_correct:
+                correct_answers_count += 1
+    
+    score = int((correct_answers_count / total_questions) * 100) if total_questions > 0 else 0
+
+    user_attempt = UserQuizAttempt.query.filter_by(user_id=user_id, quiz_id=quiz_id).first()
+    if user_attempt:
+        user_attempt.score = score
+        user_attempt.attempt_date = datetime.utcnow()
+    else:
+        new_attempt = UserQuizAttempt(user_id=user_id, quiz_id=quiz_id, score=score)
+        db.session.add(new_attempt)
+    
+    db.session.commit()
+    flash(f"Quizi tamamladınız! Puanınız: {score}%", "success")
+
+    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
+
+@app.route("/delete_quiz_attempt", methods=["POST"])
+@login_required
+def delete_quiz_attempt():
+    quiz_attempt_id = request.form.get("quiz_attempt_id", type=int)
+    selected_ders_id = request.form.get("selected_ders_id", type=int)
+    selected_konu_id = request.form.get("selected_konu_id", type=int)
+
+    attempt = UserQuizAttempt.query.get(quiz_attempt_id)
+    if attempt and attempt.user_id == session.get('user_id'):
+        db.session.delete(attempt)
+        db.session.commit()
+        flash("Quiz denemeniz başarıyla silindi.", "info")
+    else:
+        flash("Quiz denemesi bulunamadı veya silme yetkiniz yok.", "danger")
+
+    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
+
+
+@app.route("/add_comment", methods=["POST"])
+@login_required
+def add_comment():
+    user_id = session.get("user_id")
+    alt_baslik_id = request.form.get("alt_baslik_id", type=int)
+    comment_content = request.form.get("comment_content", "").strip()
+    parent_comment_id = request.form.get("parent_comment_id", type=int) or None
+    
+    selected_ders_id = request.form.get("selected_ders_id", type=int)
+    selected_konu_id = request.form.get("selected_konu_id", type=int)
+
+    if not comment_content:
+        flash("Yorum içeriği boş olamaz.", "danger")
+    elif not alt_baslik_id:
+        flash("Yorum yapılacak alt başlık belirtilmemiş.", "danger")
+    else:
+        new_comment = Comment(
+            user_id=user_id,
+            alt_baslik_id=alt_baslik_id,
+            content=comment_content,
+            parent_comment_id=parent_comment_id
+        )
+        db.session.add(new_comment)
+        db.session.commit()
+        flash("Yorumunuz başarıyla eklendi.", "success")
+    
+    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
+
+@app.route("/delete_comment", methods=["POST"])
+@login_required
+def delete_comment():
+    comment_id = request.form.get("comment_id", type=int)
+    selected_ders_id = request.form.get("selected_ders_id", type=int)
+    selected_konu_id = request.form.get("selected_konu_id", type=int)
+
+    comment_to_delete = Comment.query.get(comment_id)
+
+    if not comment_to_delete:
+        flash("Yorum bulunamadı.", "danger")
+    elif comment_to_delete.user_id != session.get('user_id') and not session.get('is_admin'):
+        flash("Bu yorumu silme yetkiniz yok.", "danger")
+    else:
+        db.session.delete(comment_to_delete)
+        db.session.commit()
+        flash("Yorum başarıyla silindi.", "success")
+    
     return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
 
 
@@ -630,6 +813,23 @@ def edit_alt_baslik(alt_baslik_id):
     return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler)
 
 
-# Lokalde çalıştırmak için `if __name__` bloğu aynı kalıyor
 if __name__ == '__main__':
+    # Flask uygulaması bağlamına girerek ilk çalıştırmada admin kullanıcısı oluştur
+    with app.app_context():
+        # Veritabanında hiç kullanıcı yoksa varsayılan admin kullanıcısını oluştur
+        if User.query.count() == 0:
+            print("Veritabanında hiç kullanıcı bulunamadı. Varsayılan admin kullanıcısı oluşturuluyor...")
+            admin_username = 'admin'
+            admin_password = 'Cemyildiz10.' # Lütfen BURAYA KENDİ GÜVENLİ ŞİFRENİ YAZ!
+
+            hashed_password = generate_password_hash(admin_password)
+            # expire_date=None yaparak süresiz erişim sağla
+            default_admin = User(username=admin_username, password=hashed_password, is_admin=True, expire_date=None) 
+
+            db.session.add(default_admin)
+            db.session.commit()
+            print(f"Varsayılan admin kullanıcısı '{admin_username}' oluşturuldu.")
+        else:
+            print("Veritabanında kullanıcılar zaten mevcut. Yeni admin oluşturulmadı.")
+
     app.run(debug=True)

@@ -317,9 +317,9 @@
                                 {% for ders in dersler %}
                                     <optgroup label="{{ ders.name }}">
                                         {% for konu in ders.konular %}
-                                            <optgroup label="&nbsp;&nbsp;&nbsp;{{ konu.name }}">
+                                            <optgroup label="   {{ konu.name }}">
                                                 {% for alt_baslik in konu.alt_basliklar %}
-                                                    <option value="{{ alt_baslik.id }}">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ alt_baslik.name }}</option>
+                                                    <option value="{{ alt_baslik.id }}">      {{ alt_baslik.name }}</option>
                                                 {% endfor %}
                                             </optgroup>
                                         {% endfor %}
@@ -333,6 +333,72 @@
                             <small class="form-text text-muted">İzin verilen uzantılar: pdf, doc, docx, ppt, pptx, xls, xlsx, zip, rar, txt</small>
                         </div>
                         <button type="submit" class="btn btn-primary w-100">Materyal Yükle</button>
+                    </form>
+                </div>
+            </div>
+
+            {# Yeni Quiz Ekleme Kartı EKLENDİ #}
+            <div class="card shadow">
+                <div class="card-body">
+                    <h5 class="card-title">Yeni Quiz Ekle</h5>
+                    <form method="post" action="{{ url_for('admin_panel') }}">
+                        <input type="hidden" name="action" value="add_quiz">
+                        <div class="mb-2">
+                            <label class="form-label">Hangi Alt Başlığa Eklenecek?</label>
+                            <select name="alt_baslik_sec_quiz" class="form-select" required>
+                                <option value="" disabled selected>Alt Başlık Seçiniz</option>
+                                {% for ders in dersler %}
+                                    <optgroup label="{{ ders.name }}">
+                                        {% for konu in ders.konular %}
+                                            <optgroup label="   {{ konu.name }}">
+                                                {% for alt_baslik in konu.alt_basliklar %}
+                                                    <option value="{{ alt_baslik.id }}">      {{ alt_baslik.name }}</option>
+                                                {% endfor %}
+                                            </optgroup>
+                                        {% endfor %}
+                                    </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Quiz Başlığı</label>
+                            <input name="quiz_title" class="form-control" placeholder="Örn: Fonksiyonlar - Temel Kavramlar Quizi" required>
+                        </div>
+                        <p class="mt-3 mb-1 fw-bold">Sorular ve Cevaplar (En az 1 soru, her soru için 2-4 cevap)</p>
+                        <div id="quiz-questions-container">
+                            {# İlk soru alanı #}
+                            <div class="question-block border rounded p-3 mb-2">
+                                <label class="form-label">Soru 1</label>
+                                <textarea name="question_text[]" class="form-control mb-2" rows="2" placeholder="Soruyu buraya yazın" required></textarea>
+                                <label class="form-label">Cevap Seçenekleri (Doğru cevabı işaretle)</label>
+                                <div class="input-group mb-1">
+                                    <div class="input-group-text">
+                                        <input class="form-check-input mt-0" type="radio" name="correct_answer_1" value="0" required>
+                                    </div>
+                                    <input type="text" name="answer_text_1[]" class="form-control" placeholder="Cevap A" required>
+                                </div>
+                                <div class="input-group mb-1">
+                                    <div class="input-group-text">
+                                        <input class="form-check-input mt-0" type="radio" name="correct_answer_1" value="1">
+                                    </div>
+                                    <input type="text" name="answer_text_1[]" class="form-control" placeholder="Cevap B" required>
+                                </div>
+                                <div class="input-group mb-1">
+                                    <div class="input-group-text">
+                                        <input class="form-check-input mt-0" type="radio" name="correct_answer_1" value="2">
+                                    </div>
+                                    <input type="text" name="answer_text_1[]" class="form-control" placeholder="Cevap C">
+                                </div>
+                                <div class="input-group mb-1">
+                                    <div class="input-group-text">
+                                        <input class="form-check-input mt-0" type="radio" name="correct_answer_1" value="3">
+                                    </div>
+                                    <input type="text" name="answer_text_1[]" class="form-control" placeholder="Cevap D">
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-info w-100 mb-3" id="add-question-btn"><i class="bi bi-plus-circle-fill me-1"></i> Yeni Soru Ekle</button>
+                        <button type="submit" class="btn btn-success w-100">Quiz Ekle</button>
                     </form>
                 </div>
             </div>
@@ -386,21 +452,23 @@
                             <div id="collapse-{{ ders.id }}" class="accordion-collapse collapse" data-bs-parent="#dersAccordion">
                                 <div class="accordion-body">
                                     {% for konu in ders.konular %}
-                                        <div class="p-2 border rounded mb-2 d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <strong>{{ konu.name }}</strong>
+                                        <div class="p-2 border rounded mb-2 d-flex flex-column"> {# flex-column yapıldı #}
+                                            <div class="d-flex justify-content-between align-items-center mb-2"> {# Yeni div eklendi #}
+                                                <div>
+                                                    <strong>{{ konu.name }}</strong>
+                                                </div>
+                                                <div class="d-flex gap-2">
+                                                    <a href="{{ url_for('edit_konu', konu_id=konu.id) }}" class="btn btn-sm btn-secondary-edit"><i class="bi bi-pencil-square"></i> Düzenle</a>
+                                                    <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
+                                                        <input type="hidden" name="delete_type" value="konu">
+                                                        <input type="hidden" name="id" value="{{ konu.id }}">
+                                                        <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Konuyu silmek istediğinize emin misiniz?')"><i class="bi bi-trash"></i> Sil</button>
+                                                    </form>
+                                                </div>
                                             </div>
-                                            <div class="d-flex gap-2">
-                                                <a href="{{ url_for('edit_konu', konu_id=konu.id) }}" class="btn btn-sm btn-secondary-edit"><i class="bi bi-pencil-square"></i> Düzenle</a>
-                                                <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
-                                                    <input type="hidden" name="delete_type" value="konu">
-                                                    <input type="hidden" name="id" value="{{ konu.id }}">
-                                                    <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Konuyu silmek istediğinize emin misiniz?')"><i class="bi bi-trash"></i> Sil</button>
-                                                </form>
-                                            </div>
-                                            <ul class="mt-2 w-100">
+                                            <ul class="mt-2 w-100 list-unstyled"> {# list-unstyled eklendi #}
                                             {% for alt_baslik in konu.alt_basliklar %}
-                                                <li class="d-flex justify-content-between align-items-center">
+                                                <li class="d-flex justify-content-between align-items-center py-2 border-bottom"> {# py-2 border-bottom eklendi #}
                                                     <div>
                                                         {{ alt_baslik.name }} 
                                                     </div>
@@ -412,6 +480,23 @@
                                                             <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Alt başlığı silmek istediğinize emin misiniz?')"><i class="bi bi-trash"></i> Sil</button>
                                                         </form>
                                                     </div>
+                                                    {% if alt_baslik.quiz %} {# QUIZ GÖRÜNTÜLEME VE SİLME EKLENDİ #}
+                                                        <ul class="list-unstyled ms-3 mt-1 small w-100">
+                                                            <li>
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    <div>
+                                                                        <i class="bi bi-question-circle-fill me-1"></i> Quiz: <strong>{{ alt_baslik.quiz.title }}</strong>
+                                                                        ({{ alt_baslik.quiz.questions|length }} soru)
+                                                                    </div>
+                                                                    <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
+                                                                        <input type="hidden" name="delete_type" value="quiz">
+                                                                        <input type="hidden" name="id" value="{{ alt_baslik.quiz.id }}">
+                                                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Bu quizi silmek istediğinize emin misiniz? Bu işlem tüm soruları ve cevapları da siler.')"><i class="bi bi-trash"></i> Sil</button>
+                                                                    </form>
+                                                                </div>
+                                                            </li>
+                                                        </ul>
+                                                    {% endif %}
                                                     {% if alt_baslik.materials %}
                                                         <ul class="list-unstyled ms-3 mt-1 small w-100">
                                                             {% for material in alt_baslik.materials %}
@@ -580,6 +665,54 @@
                 }
             }
         }
+    });
+
+    // Yeni soru ekleme butonu
+    document.addEventListener('DOMContentLoaded', function() {
+        let questionCounter = 1;
+
+        document.getElementById('add-question-btn').addEventListener('click', function() {
+            questionCounter++;
+            const container = document.getElementById('quiz-questions-container');
+            const newQuestionBlock = document.createElement('div');
+            newQuestionBlock.classList.add('question-block', 'border', 'rounded', 'p-3', 'mb-2');
+            newQuestionBlock.innerHTML = `
+                <label class="form-label">Soru ${questionCounter}</label>
+                <textarea name="question_text[]" class="form-control mb-2" rows="2" placeholder="Soruyu buraya yazın" required></textarea>
+                <label class="form-label">Cevap Seçenekleri (Doğru cevabı işaretle)</label>
+                <div class="input-group mb-1">
+                    <div class="input-group-text">
+                        <input class="form-check-input mt-0" type="radio" name="correct_answer_${questionCounter}" value="0" required>
+                    </div>
+                    <input type="text" name="answer_text_${questionCounter}[]" class="form-control" placeholder="Cevap A" required>
+                </div>
+                <div class="input-group mb-1">
+                    <div class="input-group-text">
+                        <input class="form-check-input mt-0" type="radio" name="correct_answer_${questionCounter}" value="1">
+                    </div>
+                    <input type="text" name="answer_text_${questionCounter}[]" class="form-control" placeholder="Cevap B" required>
+                </div>
+                <div class="input-group mb-1">
+                    <div class="input-group-text">
+                        <input class="form-check-input mt-0" type="radio" name="correct_answer_${questionCounter}" value="2">
+                    </div>
+                    <input type="text" name="answer_text_${questionCounter}[]" class="form-control" placeholder="Cevap C">
+                </div>
+                <div class="input-group mb-1">
+                    <div class="input-group-text">
+                        <input class="form-check-input mt-0" type="radio" name="correct_answer_${questionCounter}" value="3">
+                    </div>
+                    <input type="text" name="answer_text_${questionCounter}[]" class="form-control" placeholder="Cevap D">
+                </div>
+                <button type="button" class="btn btn-danger btn-sm mt-2 remove-question-btn"><i class="bi bi-x-circle-fill me-1"></i> Soruyu Kaldır</button>
+            `;
+            container.appendChild(newQuestionBlock);
+
+            // Yeni eklenen soru bloğunun kaldırma butonuna dinleyici ekle
+            newQuestionBlock.querySelector('.remove-question-btn').addEventListener('click', function() {
+                newQuestionBlock.remove();
+            });
+        });
     });
 </script>
 
