@@ -1,8 +1,8 @@
-"""Initial freshh setup
+"""Initial complete database setup with quiz details and comments
 
-Revision ID: bc9afe0085f1
+Revision ID: 60ca84d3c628
 Revises: 
-Create Date: 2025-07-13 00:50:58.361618
+Create Date: 2025-07-13 10:27:45.688176
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'bc9afe0085f1'
+revision = '60ca84d3c628'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -108,6 +108,7 @@ def upgrade():
     sa.Column('quiz_id', sa.Integer(), nullable=False),
     sa.Column('score', sa.Integer(), nullable=False),
     sa.Column('attempt_date', sa.DateTime(), nullable=True),
+    sa.Column('details', sa.JSON(), nullable=True),
     sa.ForeignKeyConstraint(['quiz_id'], ['quiz.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
     sa.PrimaryKeyConstraint('id'),

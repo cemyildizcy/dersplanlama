@@ -274,6 +274,22 @@
             border-top: 1px solid var(--border-color);
             padding-top: 15px;
         }
+
+        /* Quiz geri bildirim stilleri */
+        .quiz-feedback p {
+            margin-bottom: 0.5rem;
+        }
+        .quiz-feedback .correct-answer {
+            color: #28a745; /* Yeşil */
+            font-weight: bold;
+        }
+        .quiz-feedback .wrong-answer {
+            color: #dc3545; /* Kırmızı */
+            font-weight: bold;
+        }
+        .quiz-feedback .user-choice {
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -389,11 +405,11 @@
                                             {% endfor %}
                                         {% endif %}
 
-                                        {# Quiz Butonu EKLENDİ #}
+                                        {# Quiz Butonu #}
                                         {% if alt_baslik.quiz %}
-                                            {% set user_quiz_attempt = UserQuizAttempt.query.filter_by(user_id=session['user_id'], quiz_id=alt_baslik.quiz.id).first() %}
-                                            <button type="button" class="btn btn-sm {% if user_quiz_attempt %}btn-info{% else %}btn-warning{% endif %}" data-bs-toggle="collapse" data-bs-target="#quizCollapse{{ alt_baslik.id }}" aria-expanded="false" aria-controls="quizCollapse{{ alt_baslik.id }}">
-                                                <i class="bi bi-question-circle-fill me-1"></i> Quiz Çöz {% if user_quiz_attempt %}(Puan: {{ user_quiz_attempt.score }}%) {% endif %}
+                                            {% set quiz_attempt_data = quiz_results.get(alt_baslik.quiz.id) %}
+                                            <button type="button" class="btn btn-sm {% if quiz_attempt_data %}btn-info{% else %}btn-warning{% endif %}" data-bs-toggle="collapse" data-bs-target="#quizCollapse{{ alt_baslik.id }}" aria-expanded="{% if show_quiz_result and show_quiz_result == alt_baslik.id %}true{% else %}false{% endif %}" aria-controls="quizCollapse{{ alt_baslik.id }}">
+                                                <i class="bi bi-question-circle-fill me-1"></i> Quiz Çöz {% if quiz_attempt_data %}(Puan: {{ quiz_attempt_data.score }}%) {% endif %}
                                             </button>
                                         {% endif %}
                                         
@@ -422,7 +438,6 @@
                                             {% set embed_url = "" %}
                                             
                                             {# YouTube veya Vimeo linkini iframe src'ye dönüştürme mantığı #}
-                                            {# ÖNEMLİ: YouTube URL'leri dinamik olarak değişebilir, bu yüzden anahtar kelimelerle kontrol etmek daha sağlamdır. #}
                                             {% if 'youtube.com/watch?v=' in video_url or 'youtu.be/' in video_url %}
                                                 {% set video_id = '' %}
                                                 {% if 'watch?v=' in video_url %}
@@ -431,21 +446,24 @@
                                                     {% set video_id = video_url.split('youtu.be/')[-1].split('?')[0] %}
                                                 {% endif %}
                                                 {% if video_id %}
-                                                    {% set embed_url = 'https://www.youtube.com/embed/' ~ video_id ~ '?autoplay=1&rel=0&modestbranding=1' %}
+                                                    {# autoplay=0 veya autoplay kaldırıldı, JS ile kontrol edilecek #}
+                                                    {% set embed_url = 'https://www.youtube.com/embed/' ~ video_id ~ '?enablejsapi=1&rel=0&modestbranding=1' %}
                                                 {% endif %}
                                             {% elif 'vimeo.com/' in video_url %}
                                                 {% set video_id = video_url.split('/')[-1].split('?')[0] %}
-                                                {% set embed_url = 'https://player.vimeo.com/video/' ~ video_id ~ '?autoplay=1&title=0&byline=0&portrait=0' %}
+                                                {# autoplay=0 veya autoplay kaldırıldı, JS ile kontrol edilecek #}
+                                                {% set embed_url = 'https://player.vimeo.com/video/' ~ video_id ~ '?title=0&byline=0&portrait=0' %}
                                             {% endif %}
 
                                             {% if embed_url %}
                                                 <div class="mb-3">
                                                     <h6 class="fw-bold mb-2">Video {{ loop.index }}</h6>
                                                     <div class="ratio ratio-16x9">
-                                                        <iframe src="{{ embed_url }}" 
+                                                        {# data-src eklendi, src başlangıçta boş #}
+                                                        <iframe data-src="{{ embed_url }}" 
                                                                 title="Video player" 
                                                                 frameborder="0" 
-                                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                                                                 allowfullscreen></iframe>
                                                     </div>
                                                 </div>
@@ -461,20 +479,38 @@
 
                                 {# Quiz İçeriği Akordiyon Alanı #}
                                 {% if alt_baslik.quiz %}
-                                    <div class="collapse quiz-collapse mt-3 border-top pt-3" id="quizCollapse{{ alt_baslik.id }}">
+                                    <div class="collapse quiz-collapse mt-3 border-top pt-3 {% if show_quiz_result and show_quiz_result == alt_baslik.id %}show{% endif %}" id="quizCollapse{{ alt_baslik.id }}">
                                         <h5>{{ alt_baslik.quiz.title }}</h5>
-                                        {% set user_quiz_attempt = UserQuizAttempt.query.filter_by(user_id=session['user_id'], quiz_id=alt_baslik.quiz.id).first() %}
-                                        {% if user_quiz_attempt %}
+                                        {% set quiz_attempt_data = quiz_results.get(alt_baslik.quiz.id) %}
+                                        {% if quiz_attempt_data %}
                                             <div class="alert alert-success" role="alert">
-                                                Bu quizi daha önce tamamladınız! Puanınız: <strong>{{ user_quiz_attempt.score }}%</strong> ({{ user_quiz_attempt.attempt_date.strftime('%Y-%m-%d %H:%M') }})
+                                                Bu quizi tamamladınız! Puanınız: <strong>{{ quiz_attempt_data.score }}%</strong> ({{ quiz_attempt_data.attempt_date.strftime('%Y-%m-%d %H:%M') }})
                                                 <form action="{{ url_for('delete_quiz_attempt') }}" method="post" class="d-inline ms-3">
-                                                    <input type="hidden" name="quiz_attempt_id" value="{{ user_quiz_attempt.id }}">
+                                                    <input type="hidden" name="quiz_attempt_id" value="{{ quiz_attempt_data.id }}">
                                                     <input type="hidden" name="alt_baslik_id" value="{{ alt_baslik.id }}">
                                                     <input type="hidden" name="selected_ders_id" value="{{ selected_ders.id if selected_ders else '' }}">
                                                     <input type="hidden" name="selected_konu_id" value="{{ selected_konu.id if selected_konu else '' }}">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu quiz denemesini silmek istediğinize emin misiniz?')">Denemeyi Sil</button>
                                                 </form>
                                             </div>
+
+                                            {# Quiz Geri Bildirim Detayları #}
+                                            <div class="quiz-feedback mt-3">
+                                                <h6>Quiz Sonuç Detayları:</h6>
+                                                {% for detail in quiz_attempt_data.details %}
+                                                    <div class="mb-2 p-2 border rounded {% if detail.is_correct %}border-success bg-light-success{% else %}border-danger bg-light-danger{% endif %}">
+                                                        <p class="fw-bold mb-1">Soru: {{ detail.question_text }}</p>
+                                                        <p class="mb-1">Seçiminiz: <span class="user-choice">{{ detail.user_selected_answer }}</span></p>
+                                                        {% if detail.is_correct %}
+                                                            <p class="correct-answer mb-0"><i class="bi bi-check-circle-fill me-1"></i> Doğru Cevap!</p>
+                                                        {% else %}
+                                                            <p class="wrong-answer mb-1"><i class="bi bi-x-circle-fill me-1"></i> Yanlış Cevap!</p>
+                                                            <p class="mb-0">Doğru Cevap: <span class="correct-answer">{{ detail.correct_answer }}</span></p>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+
                                         {% else %}
                                             <form method="post" action="{{ url_for('submit_quiz') }}">
                                                 <input type="hidden" name="quiz_id" value="{{ alt_baslik.quiz.id }}">
@@ -614,19 +650,24 @@ document.querySelectorAll('.video-collapse').forEach(collapseElement => {
     collapseElement.addEventListener('show.bs.collapse', function () {
         const iframes = this.querySelectorAll('iframe');
         iframes.forEach(iframe => {
-            const src = iframe.getAttribute('src');
-            // Sadece src'si olan ve autoplay içermeyen iframe'leri yükle/tekrar yükle
-            if (src) {
-                // Eğer src'de zaten autoplay yoksa ekle
-                if (!src.includes('autoplay=1')) {
-                    if (src.includes('?')) {
-                        iframe.src = src + '&autoplay=1';
-                    } else {
-                        iframe.src = src + '?autoplay=1';
-                    }
+            const dataSrc = iframe.getAttribute('data-src');
+            // Eğer iframe'in src'si boşsa ve data-src varsa, yükle
+            if (!iframe.src && dataSrc) {
+                // Autoplay parametresini ekleyerek yükle
+                if (dataSrc.includes('?')) {
+                    iframe.src = dataSrc + '&autoplay=1';
                 } else {
-                    // Zaten autoplay varsa, videonun tekrar yüklenmesi için src'yi yenile
-                    iframe.src = src;
+                    iframe.src = dataSrc + '?autoplay=1';
+                }
+            } else if (iframe.src) {
+                // Zaten src varsa (örneğin collapse tekrar açıldıysa), videoyu yeniden başlatmak için
+                // src'yi sıfırla ve yeniden ayarla (bazen tarayıcılar durdurulan videoyu tekrar başlatmaz)
+                const currentSrc = iframe.src;
+                iframe.src = ""; // Videoyu durdur
+                if (currentSrc.includes('?')) {
+                    iframe.src = currentSrc + '&autoplay=1';
+                } else {
+                    iframe.src = currentSrc + '?autoplay=1';
                 }
             }
         });
@@ -636,14 +677,37 @@ document.querySelectorAll('.video-collapse').forEach(collapseElement => {
         const iframes = this.querySelectorAll('iframe');
         iframes.forEach(iframe => {
             // Collapse kapanırken videoyu durdurmak için src'yi sıfırla
-            const src = iframe.getAttribute('src');
-            if (src) {
+            if (iframe.src) {
+                const currentSrc = iframe.src;
                 iframe.src = ""; // Videoyu durdur
-                // Orijinal src'yi geri yüklerken autoplay parametresini kaldır
-                iframe.src = src.replace('?autoplay=1', '').replace('&autoplay=1', ''); 
+                // Orijinal data-src'yi geri yüklerken autoplay parametresini kaldır
+                // Bu sayede bir sonraki açılışta tekrar autoplay çalışır.
+                const dataSrc = iframe.getAttribute('data-src');
+                if (dataSrc) {
+                    iframe.src = dataSrc; 
+                }
             }
         });
     });
+});
+
+
+// Quiz sonucunu göstermek için URL parametresini kontrol et
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const showQuizResultId = urlParams.get('show_quiz_result');
+    if (showQuizResultId) {
+        const quizCollapseElement = document.getElementById('quizCollapse' + showQuizResultId);
+        if (quizCollapseElement) {
+            const bsCollapse = new bootstrap.Collapse(quizCollapseElement, {
+                toggle: false // Otomatik açılmasını engelle, sadece `show` sınıfını ekle
+            });
+            quizCollapseElement.classList.add('show'); // Manuel olarak 'show' sınıfını ekle
+            
+            // Sayfayı kaydır
+            quizCollapseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
 });
 
 </script>

@@ -9,6 +9,7 @@ from functools import wraps
 from sqlalchemy import UniqueConstraint
 from werkzeug.utils import secure_filename # Güvenli dosya adı için
 from sqlalchemy import func # SQL fonksiyonları için (örn. count)
+from sqlalchemy.orm import joinedload # UserPanel'de ilişkili verileri yüklemek için
 
 # --- UYGULAMA VE VERİTABANI KURULUMU ---
 
@@ -139,6 +140,8 @@ class UserQuizAttempt(db.Model):
     quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), nullable=False)
     score = db.Column(db.Integer, nullable=False)
     attempt_date = db.Column(db.DateTime, default=datetime.utcnow)
+    # Yeni eklendi: Quiz denemesinin detaylarını tutmak için
+    details = db.Column(db.JSON) # Hangi soruya ne cevap verildi, doğru/yanlış bilgisi
 
     __table_args__ = (UniqueConstraint('user_id', 'quiz_id', name='_user_quiz_uc'),)
 
@@ -190,9 +193,6 @@ def login():
         if user and check_password_hash(user.password, password):
             # Erişim süresi kontrolü
             if user.expire_date:
-                # current_app.logger.debug(f"User expire date: {user.expire_date}, UTC now: {datetime.utcnow()}")
-                # datetime.utcnow() ile karşılaştırma yaparken bir günlük tolerans ekleyebiliriz
-                # Böylece bitiş günü dahil erişim sağlanır
                 if datetime.utcnow() >= (user.expire_date + timedelta(days=1)):
                     flash(f"Erişim süreniz {user.expire_date.strftime('%Y-%m-%d')} tarihinde dolmuştur. Lütfen yöneticinizle iletişime geçin.", "danger")
                     return redirect(url_for('login'))
@@ -226,8 +226,6 @@ def admin_panel():
         delete_type = request.form.get("delete_type")
         delete_id = request.form.get("id", type=int)
         
-        # current_app.logger.debug(f"DEBUG: Silme isteği alındı. Tür: {delete_type}, ID: {delete_id}, Admin mi: {session.get('is_admin')}, Ana Admin mi: {is_main_admin}")
-
         if delete_type and delete_id:
             item_to_delete = None
             try:
@@ -246,11 +244,9 @@ def admin_panel():
                 elif delete_type == "material": 
                     material_to_delete = Material.query.get_or_404(delete_id)
                     file_path = os.path.join(app.config['UPLOAD_FOLDER'], material_to_delete.filename)
-                    # current_app.logger.debug(f"DEBUG: Materyal dosyası silinmeye çalışılıyor: {file_path}")
                     if os.path.exists(file_path):
                         try:
                             os.remove(file_path)
-                            # current_app.logger.debug(f"DEBUG: Dosya {file_path} başarıyla silindi.")
                         except OSError as e:
                             current_app.logger.error(f"HATA: Dosya silinirken hata oluştu {file_path}: {e}")
                             flash(f"Dosya silinirken bir hata oluştu: {e}", "danger")
@@ -259,17 +255,14 @@ def admin_panel():
                     item_to_delete = material_to_delete
                 
                 if item_to_delete:
-                    # current_app.logger.debug(f"DEBUG: Silinecek öğe bulundu: {item_to_delete}")
                     if delete_type == 'user' and item_to_delete.username == 'admin':
                         flash("Ana admin kullanıcısı silinemez.", "danger")
-                        # current_app.logger.debug("DEBUG: Ana admin kullanıcısı silinmeye çalıştı.")
                     else:
                         db.session.delete(item_to_delete)
                         db.session.commit()
                         flash(f"{delete_type.capitalize()} başarıyla silindi.", "success")
-                        # current_app.logger.debug(f"DEBUG: {delete_type.capitalize()} ID {delete_id} veritabanından başarıyla silindi.")
-                # else:
-                    # current_app.logger.debug(f"DEBUG: Silme için öğe bulunamadı. Tür: {delete_type}, ID: {delete_id}.")
+                # else: # Bu else bloğu gereksiz olabilir veya daha spesifik bir hata mesajı verebilir
+                #     flash("Silinecek öğe bulunamadı.", "danger")
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.error(f"HATA: Silme işlemi sırasında beklenmeyen bir hata oluştu ({delete_type} ID {delete_id}): {e}")
@@ -476,7 +469,6 @@ def admin_panel():
 @app.route("/panel", methods=["GET"])
 @login_required
 def user_panel():
-    # current_app.logger.debug("--- user_panel fonksiyonu çağrıldı ---") # Yorum satırı yapıldı
     dersler = Ders.query.order_by(Ders.name).all()
     
     selected_ders_id = request.args.get('ders_id', type=int)
@@ -499,7 +491,6 @@ def user_panel():
     if user:
         progress_records = UserProgress.query.filter_by(user_id=user.id).all()
         completed_alt_baslik_ids = {p.alt_baslik_id for p in progress_records}
-    # current_app.logger.debug(f"DEBUG: Kullanıcının tamamladığı alt başlık ID'leri: {completed_alt_baslik_ids}") # Yorum satırı yapıldı
 
     unique_recommended_alt_basliks = []
 
@@ -515,10 +506,21 @@ def user_panel():
 
     active_announcements = Announcement.query.filter_by(is_active=True).order_by(Announcement.created_at.desc()).all()
 
-    from sqlalchemy.orm import joinedload
-    # user_quiz_attempts = db.session.query(UserQuizAttempt).filter_by(user_id=session['user_id']).options(joinedload(UserQuizAttempt.quiz)).all() # Yorum satırı yapıldı
-    # user_quiz_attempts_map = {attempt.quiz_id: attempt for attempt in user_quiz_attempts} # Yorum satırı yapıldı
-
+    # Quiz sonuçlarını çekmek için ekstra sorgular
+    # Sadece belirli bir konu seçiliyse ve ilgili alt başlıkların quizleri varsa çekiyoruz
+    quiz_results = {}
+    if selected_konu and user:
+        for alt_baslik in selected_konu.alt_basliklar:
+            if alt_baslik.quiz:
+                attempt = UserQuizAttempt.query.filter_by(user_id=user.id, quiz_id=alt_baslik.quiz.id).first()
+                if attempt:
+                    # Attempt'in details JSON objesini çözümleyerek gönder
+                    quiz_results[alt_baslik.quiz.id] = {
+                        'score': attempt.score,
+                        'attempt_date': attempt.attempt_date,
+                        'details': attempt.details # Bu JSON alanı user.html'de kullanılacak
+                    }
+    
     return render_template('user.html', 
                            dersler=dersler, 
                            selected_ders=selected_ders, 
@@ -528,8 +530,9 @@ def user_panel():
                            completion_percentage=completion_percentage,
                            active_announcements=active_announcements,
                            recommended_alt_basliks=unique_recommended_alt_basliks,
-                           UserQuizAttempt=UserQuizAttempt,
-                           session=session
+                           UserQuizAttempt=UserQuizAttempt, # Sadece model referansı
+                           session=session,
+                           quiz_results=quiz_results # Yeni eklenen quiz sonuçları
                            )
 
 @app.route("/mark_completed", methods=["POST"])
@@ -579,6 +582,7 @@ def submit_quiz():
 
     correct_answers_count = 0
     total_questions = len(quiz.questions)
+    quiz_attempt_details = [] # Yeni: Quiz detaylarını saklamak için liste
 
     if total_questions == 0:
         flash("Bu quizde soru bulunmamaktadır.", "warning")
@@ -586,10 +590,28 @@ def submit_quiz():
 
     for question in quiz.questions:
         selected_answer_id = request.form.get(f"question_{question.id}", type=int)
-        if selected_answer_id:
-            selected_answer = Answer.query.get(selected_answer_id)
-            if selected_answer and selected_answer.is_correct:
-                correct_answers_count += 1
+        
+        is_correct_answer = False
+        user_selected_answer_text = "Cevap verilmedi"
+        correct_answer_text = "Belirtilmedi"
+
+        correct_answer_obj = None
+        for answer in question.answers:
+            if answer.is_correct:
+                correct_answer_obj = answer
+                correct_answer_text = answer.answer_text
+            if selected_answer_id and answer.id == selected_answer_id:
+                user_selected_answer_text = answer.answer_text
+                if answer.is_correct:
+                    is_correct_answer = True
+                    correct_answers_count += 1
+        
+        quiz_attempt_details.append({
+            'question_text': question.question_text,
+            'user_selected_answer': user_selected_answer_text,
+            'correct_answer': correct_answer_text,
+            'is_correct': is_correct_answer
+        })
     
     score = int((correct_answers_count / total_questions) * 100) if total_questions > 0 else 0
 
@@ -597,14 +619,15 @@ def submit_quiz():
     if user_attempt:
         user_attempt.score = score
         user_attempt.attempt_date = datetime.utcnow()
+        user_attempt.details = quiz_attempt_details # Detaylar güncellendi
     else:
-        new_attempt = UserQuizAttempt(user_id=user_id, quiz_id=quiz_id, score=score)
+        new_attempt = UserQuizAttempt(user_id=user_id, quiz_id=quiz_id, score=score, details=quiz_attempt_details) # Detaylar eklendi
         db.session.add(new_attempt)
     
     db.session.commit()
     flash(f"Quizi tamamladınız! Puanınız: {score}%", "success")
 
-    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id))
+    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id, show_quiz_result=alt_baslik_id)) # Quiz sonucunu göstermek için parametre
 
 @app.route("/delete_quiz_attempt", methods=["POST"])
 @login_required
@@ -814,12 +837,12 @@ def edit_alt_baslik(alt_baslik_id):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
     # Flask uygulaması bağlamına girerek ilk çalıştırmada admin kullanıcısı oluştur
     with app.app_context():
         # Veritabanında hiç kullanıcı yoksa varsayılan admin kullanıcısını oluştur
-        if User.query.count() == 0:
-            print("Veritabanında hiç kullanıcı bulunamadı. Varsayılan admin kullanıcısı oluşturuluyor...")
+        # VEYA sadece 'admin' kullanıcısı yoksa oluştur
+        if User.query.filter_by(username='admin').first() is None:
+            print("Admin kullanıcısı bulunamadı. Varsayılan admin kullanıcısı oluşturuluyor...")
             admin_username = 'admin'
             admin_password = 'Cemyildiz10.' # Lütfen BURAYA KENDİ GÜVENLİ ŞİFRENİ YAZ!
 
@@ -831,6 +854,6 @@ if __name__ == '__main__':
             db.session.commit()
             print(f"Varsayılan admin kullanıcısı '{admin_username}' oluşturuldu.")
         else:
-            print("Veritabanında kullanıcılar zaten mevcut. Yeni admin oluşturulmadı.")
+            print("Admin kullanıcısı zaten mevcut. Yeni admin oluşturulmadı.")
 
     app.run(debug=True)
