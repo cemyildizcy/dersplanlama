@@ -279,6 +279,7 @@
                         </div>
                         <div class="mb-2"><label class="form-label">Alt Başlık Adı</label><input name="alt_baslik" class="form-control" required></div>
                         <div class="mb-2"><label class="form-label">Video Linki (virgülle ayırın)</label><input name="video" class="form-control"></div>
+                        {# Notlar kaldırıldı #}
                         <button type="submit" class="btn btn-primary w-100">Alt Başlık Ekle</button>
                     </form>
                 </div>
@@ -336,7 +337,7 @@
                 </div>
             </div>
 
-            {# Yeni Quiz Ekleme Kartı EKLENDİ #}
+            {# Yeni Quiz Ekleme Kartı #}
             <div class="card shadow">
                 <div class="card-body">
                     <h5 class="card-title">Yeni Quiz Ekle</h5>
@@ -362,6 +363,13 @@
                         <div class="mb-2">
                             <label class="form-label">Quiz Başlığı</label>
                             <input name="quiz_title" class="form-control" placeholder="Örn: Fonksiyonlar - Temel Kavramlar Quizi" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Quiz Türü</label>
+                            <select name="quiz_type" class="form-select" required>
+                                <option value="normal" selected>Normal Quiz</option>
+                                <option value="past_exam">Çıkmış/Çıkabilecek Sorular</option>
+                            </select>
                         </div>
                         <p class="mt-3 mb-1 fw-bold">Sorular ve Cevaplar (En az 1 soru, her soru için 2-4 cevap)</p>
                         <div id="quiz-questions-container">
@@ -486,6 +494,9 @@
                                                                     <div>
                                                                         <i class="bi bi-question-circle-fill me-1"></i> Quiz: <strong>{{ alt_baslik.quiz.title }}</strong>
                                                                         ({{ alt_baslik.quiz.questions|length }} soru)
+                                                                        {% if alt_baslik.quiz.quiz_type == 'past_exam' %}
+                                                                            <span class="badge bg-secondary ms-2">Çıkmış Soru</span>
+                                                                        {% endif %}
                                                                     </div>
                                                                     <form action="{{ url_for('admin_panel') }}" method="post" class="d-inline">
                                                                         <input type="hidden" name="delete_type" value="quiz">

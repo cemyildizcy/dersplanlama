@@ -7,33 +7,29 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from functools import wraps
 from sqlalchemy import UniqueConstraint
-from werkzeug.utils import secure_filename # Güvenli dosya adı için
-from sqlalchemy import func # SQL fonksiyonları için (örn. count)
-from sqlalchemy.orm import joinedload # UserPanel'de ilişkili verileri yüklemek için
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload
+from sqlalchemy.dialects import postgresql # PostgreSQL JSON desteği için
+from werkzeug.utils import secure_filename
 
 # --- UYGULAMA VE VERİTABANI KURULUMU ---
 
 app = Flask(__name__)
 
-# Güvenli konfigürasyon: Ayarları ortam değişkenlerinden alıyoruz
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'varsayilan_cok_gizli_bir_anahtar_12345')
-# Yerel geliştirme için SQLite kullan, yayın ortamı için DATABASE_URL ortam değişkenini kullan
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///dersplanlama.db')
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Dosya yükleme klasörü ve izin verilen uzantılar
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip', 'rar', 'txt'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Eğer uploads klasörü yoksa oluştur
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# Veritabanı nesnesini ve Migrate nesnesini oluşturuyoruz
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -69,6 +65,7 @@ class AltBaslik(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     video_link = db.Column(db.Text)
+    # notlar = db.Column(db.Text) # KALDIRILDI
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
@@ -110,6 +107,7 @@ class Quiz(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
+    quiz_type = db.Column(db.String(50), nullable=False, default='normal') # quiz_type EKLENDİ
     questions = db.relationship('Question', backref='quiz', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
@@ -139,8 +137,12 @@ class UserQuizAttempt(db.Model):
     quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), nullable=False)
     score = db.Column(db.Integer, nullable=False)
     attempt_date = db.Column(db.DateTime, default=datetime.utcnow)
-    # Yeni eklendi: Quiz denemesinin detaylarını tutmak için
-    details = db.Column(db.JSON) # Hangi soruya ne cevap verildi, doğru/yanlış bilgisi
+    # Veritabanı türüne göre JSON sütunu tanımla
+    # PostgreSQL için db.JSONB veya db.JSON, SQLite için db.Text
+    details = db.Column(db.JSON if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgresql') else db.Text) 
+
+    # YENİ EKLENEN SATIR: Quiz modeli ile ilişki
+    quiz = db.relationship('Quiz', backref='attempts_rel', lazy=True) 
 
     __table_args__ = (UniqueConstraint('user_id', 'quiz_id', name='_user_quiz_uc'),)
 
@@ -260,8 +262,6 @@ def admin_panel():
                         db.session.delete(item_to_delete)
                         db.session.commit()
                         flash(f"{delete_type.capitalize()} başarıyla silindi.", "success")
-                # else: # Bu else bloğu gereksiz olabilir veya daha spesifik bir hata mesajı verebilir
-                #     flash("Silinecek öğe bulunamadı.", "danger")
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.error(f"HATA: Silme işlemi sırasında beklenmeyen bir hata oluştu ({delete_type} ID {delete_id}): {e}")
@@ -327,9 +327,10 @@ def admin_panel():
             alt_baslik_name = request.form.get("alt_baslik", "").strip()
             konu_id = request.form.get("konu_sec_alt", type=int)
             video_link = request.form.get("video", "").strip()
-            notlar = request.form.get("notlar", "").strip()
+            # Notlar kaldırıldı
+            # notlar = "" # Bu satır yok
             if alt_baslik_name and konu_id:
-                new_alt_baslik = AltBaslik(name=alt_baslik_name, konu_id=konu_id, video_link=video_link, notlar=notlar)
+                new_alt_baslik = AltBaslik(name=alt_baslik_name, konu_id=konu_id, video_link=video_link) # notlar parametresi kaldırıldı
                 db.session.add(new_alt_baslik)
                 db.session.commit()
                 flash(f"'{alt_baslik_name}' alt başlığı eklendi.", "success")
@@ -380,6 +381,7 @@ def admin_panel():
         elif action == "add_quiz":
             alt_baslik_id = request.form.get("alt_baslik_sec_quiz", type=int)
             quiz_title = request.form.get("quiz_title", "").strip()
+            quiz_type = request.form.get("quiz_type", "normal") # quiz_type EKLENDİ
             
             question_texts = request.form.getlist("question_text[]")
             
@@ -392,9 +394,9 @@ def admin_panel():
                 flash("Bu alt başlık için zaten bir quiz mevcut. Lütfen mevcut quizi silin veya düzenleyin.", "danger")
                 return redirect(url_for('admin_panel'))
 
-            new_quiz = Quiz(title=quiz_title, alt_baslik_id=alt_baslik_id)
+            new_quiz = Quiz(title=quiz_title, alt_baslik_id=alt_baslik_id, quiz_type=quiz_type) # quiz_type eklendi
             db.session.add(new_quiz)
-            db.session.flush() # new_quiz.id'ye erişmek için flush
+            db.session.flush()
 
             for i, q_text in enumerate(question_texts):
                 if not q_text.strip():
@@ -472,7 +474,8 @@ def user_panel():
     
     selected_ders_id = request.args.get('ders_id', type=int)
     selected_konu_id = request.args.get('konu_id', type=int)
-    
+    show_quiz_result_alt_baslik_id = request.args.get('show_quiz_result', type=int) # Yeni eklenen URL parametresi
+
     selected_ders = Ders.query.get(selected_ders_id) if selected_ders_id else None
     selected_konu = Konu.query.get(selected_konu_id) if selected_konu_id else None
 
@@ -505,20 +508,38 @@ def user_panel():
 
     active_announcements = Announcement.query.filter_by(is_active=True).order_by(Announcement.created_at.desc()).all()
 
-    # Quiz sonuçlarını çekmek için ekstra sorgular
-    # Sadece belirli bir konu seçiliyse ve ilgili alt başlıkların quizleri varsa çekiyoruz
+    # Quiz sonuçlarını çekmek için ekstra sorgular (UserQuizAttempt.details'ı kullanacak)
     quiz_results = {}
     if selected_konu and user:
+        # Alt başlıkların quizlerini ve o quizlere ait kullanıcı denemelerini önceden yükle
+        quiz_attempts = db.session.query(UserQuizAttempt).filter_by(user_id=user.id)\
+                        .options(joinedload(UserQuizAttempt.quiz).joinedload(Quiz.questions).joinedload(Question.answers))\
+                        .all()
+        
+        # Denemeleri quiz_id'ye göre bir dictionary'ye al
+        attempts_by_quiz_id = {attempt.quiz_id: attempt for attempt in quiz_attempts}
+
         for alt_baslik in selected_konu.alt_basliklar:
-            if alt_baslik.quiz:
-                attempt = UserQuizAttempt.query.filter_by(user_id=user.id, quiz_id=alt_baslik.quiz.id).first()
-                if attempt:
-                    # Attempt'in details JSON objesini çözümleyerek gönder
-                    quiz_results[alt_baslik.quiz.id] = {
-                        'score': attempt.score,
-                        'attempt_date': attempt.attempt_date,
-                        'details': attempt.details # Bu JSON alanı user.html'de kullanılacak
-                    }
+            if alt_baslik.quiz and alt_baslik.quiz.id in attempts_by_quiz_id:
+                attempt = attempts_by_quiz_id[alt_baslik.quiz.id]
+                
+                # SQLAlchemy'nin JSON türü otomatik olarak Python dict'e dönüştürür.
+                # db.Text olarak saklıyorsak, manuel json.loads yapmak gerekebilir.
+                if isinstance(attempt.details, str): # Eğer TEXT olarak saklanıyorsa
+                     import json
+                     try:
+                         parsed_details = json.loads(attempt.details)
+                     except json.JSONDecodeError:
+                         parsed_details = [] # Hata olursa boş liste
+                else: # Eğer db.JSON veya benzeri bir tipse, zaten dict/list olarak gelir
+                    parsed_details = attempt.details if attempt.details else []
+                
+                quiz_results[alt_baslik.quiz.id] = {
+                    'score': attempt.score,
+                    'attempt_date': attempt.attempt_date,
+                    'details': parsed_details, # Çözümlenmiş JSON detayları
+                    'id': attempt.id # Quiz denemesinin ID'si (silmek için)
+                }
     
     return render_template('user.html', 
                            dersler=dersler, 
@@ -531,7 +552,8 @@ def user_panel():
                            recommended_alt_basliks=unique_recommended_alt_basliks,
                            UserQuizAttempt=UserQuizAttempt, # Sadece model referansı
                            session=session,
-                           quiz_results=quiz_results # Yeni eklenen quiz sonuçları
+                           quiz_results=quiz_results, # Geliştirilmiş quiz sonuçları
+                           show_quiz_result=show_quiz_result_alt_baslik_id # Quiz sonucunu otomatik açmak için
                            )
 
 @app.route("/mark_completed", methods=["POST"])
@@ -581,7 +603,7 @@ def submit_quiz():
 
     correct_answers_count = 0
     total_questions = len(quiz.questions)
-    quiz_attempt_details = [] # Yeni: Quiz detaylarını saklamak için liste
+    quiz_attempt_details = [] # Quiz detaylarını saklamak için liste
 
     if total_questions == 0:
         flash("Bu quizde soru bulunmamaktadır.", "warning")
@@ -594,10 +616,9 @@ def submit_quiz():
         user_selected_answer_text = "Cevap verilmedi"
         correct_answer_text = "Belirtilmedi"
 
-        correct_answer_obj = None
+        # Doğru cevabı ve kullanıcının seçtiği cevabı bul
         for answer in question.answers:
             if answer.is_correct:
-                correct_answer_obj = answer
                 correct_answer_text = answer.answer_text
             if selected_answer_id and answer.id == selected_answer_id:
                 user_selected_answer_text = answer.answer_text
@@ -810,7 +831,8 @@ def edit_alt_baslik(alt_baslik_id):
     if request.method == "POST":
         new_name = request.form.get("name", "").strip()
         new_video_link = request.form.get("video_link", "").strip()
-        new_notlar = request.form.get("notlar", "").strip()
+        # Notlar kaldırıldı
+        # new_notlar = request.form.get("notlar", "").strip() # Bu satır yok
         new_konu_id = request.form.get("konu_id", type=int)
 
         if not new_name or not new_konu_id:
@@ -826,31 +848,30 @@ def edit_alt_baslik(alt_baslik_id):
             else:
                 alt_baslik.name = new_name
                 alt_baslik.video_link = new_video_link
-                alt_baslik.notlar = new_notlar
+                # alt_baslik.notlar kaldırıldı, bu satır yoktu
                 alt_baslik.konu_id = new_konu_id
                 db.session.commit()
                 flash(f"'{alt_baslik.name}' alt başlığı başarıyla güncellendi.", "success")
                 return redirect(url_for('admin_panel'))
-        return redirect(url_for('edit_alt_baslik', alt_baslik_id=alt_baslik.id))
+        return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler) # Redirekten önce render edildi
     return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler)
+
 
 if __name__ == '__main__':
     # Flask uygulaması bağlamına girerek ilk çalıştırmada admin kullanıcısı oluştur
     with app.app_context():
-        # Veritabanında hiç kullanıcı yoksa varsayılan admin kullanıcısını oluştur
-        # VEYA sadece 'admin' kullanıcısı yoksa oluştur
+        # Sadece 'admin' kullanıcısı yoksa oluştur
         if User.query.filter_by(username='admin').first() is None:
             print("Admin kullanıcısı bulunamadı. Varsayılan admin kullanıcısı oluşturuluyor...")
             admin_username = 'admin'
-            admin_password = 'Cemyildiz10.' # Lütfen BURAYA KENDİ GÜVENLİ ŞİFRENİ YAZ!
+            admin_password = 'Cemyildiz10.' # BURAYA KENDİ GÜVENLİ ŞİFRENI YAZ!
 
             hashed_password = generate_password_hash(admin_password)
-            # expire_date=None yaparak süresiz erişim sağla
             default_admin = User(username=admin_username, password=hashed_password, is_admin=True, expire_date=None) 
 
             db.session.add(default_admin)
             db.session.commit()
-            print(f"Varsayılan admin kullanıcısı '{admin_username}' oluşturuldu.")
+            print(f"Varsayılan admin kullanıcısı '{admin_username}' başarıyla oluşturuldu.")
         else:
             print("Admin kullanıcısı zaten mevcut. Yeni admin oluşturulmadı.")
 

@@ -290,6 +290,18 @@
         .quiz-feedback .user-choice {
             font-style: italic;
         }
+        .quiz-feedback .border-success {
+            border-color: #28a745 !important;
+        }
+        .quiz-feedback .border-danger {
+            border-color: #dc3545 !important;
+        }
+        .quiz-feedback .bg-light-success {
+            background-color: #e6ffe6 !important;
+        }
+        .quiz-feedback .bg-light-danger {
+            background-color: #ffe6e6 !important;
+        }
     </style>
 </head>
 <body>
@@ -393,6 +405,10 @@
                                                 <i class="bi bi-play-circle-fill me-1"></i> Videoları Gör
                                             </button>
                                         {% endif %}
+                                        {# Notlar kaldırıldı, materyal yüklemeye geçildi #}
+                                        {# {% if alt_baslik.notlar %}
+                                             <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ alt_baslik.notlar }}">Notlar</button>
+                                        {% endif %} #}
                                         {# Materyal indirme butonları #}
                                         {% if alt_baslik.materials %}
                                             {% for material in alt_baslik.materials %}
@@ -405,8 +421,12 @@
                                         {# Quiz Butonu #}
                                         {% if alt_baslik.quiz %}
                                             {% set quiz_attempt_data = quiz_results.get(alt_baslik.quiz.id) %}
+                                            {% set button_text = "Quiz Çöz" %}
+                                            {% if alt_baslik.quiz.quiz_type == 'past_exam' %}
+                                                {% set button_text = "Çıkmış/Çıkabilecek Sorular" %}
+                                            {% endif %}
                                             <button type="button" class="btn btn-sm {% if quiz_attempt_data %}btn-info{% else %}btn-warning{% endif %}" data-bs-toggle="collapse" data-bs-target="#quizCollapse{{ alt_baslik.id }}" aria-expanded="{% if show_quiz_result and show_quiz_result == alt_baslik.id %}true{% else %}false{% endif %}" aria-controls="quizCollapse{{ alt_baslik.id }}">
-                                                <i class="bi bi-question-circle-fill me-1"></i> Quiz Çöz {% if quiz_attempt_data %}(Puan: {{ quiz_attempt_data.score }}%) {% endif %}
+                                                <i class="bi bi-question-circle-fill me-1"></i> {{ button_text }} {% if quiz_attempt_data %}(Puan: {{ quiz_attempt_data.score }}%) {% endif %}
                                             </button>
                                         {% endif %}
                                         
@@ -435,6 +455,7 @@
                                             {% set embed_url = "" %}
                                             
                                             {# YouTube veya Vimeo linkini iframe src'ye dönüştürme mantığı #}
+                                            {# ÖNEMLİ: YouTube URL'leri dinamik olarak değişebilir, bu yüzden anahtar kelimelerle kontrol etmek daha sağlamdır. #}
                                             {% if 'youtube.com/watch?v=' in video_url or 'youtu.be/' in video_url %}
                                                 {% set video_id = '' %}
                                                 {% if 'watch?v=' in video_url %}
@@ -443,12 +464,12 @@
                                                     {% set video_id = video_url.split('youtu.be/')[-1].split('?')[0] %}
                                                 {% endif %}
                                                 {% if video_id %}
-                                                    {# autoplay=0 veya autoplay kaldırıldı, JS ile kontrol edilecek #}
+                                                    {# src boş bırakıldı, JS ile yüklenecek. enablejsapi=1 eklendi JS API kontrolü için #}
                                                     {% set embed_url = 'https://www.youtube.com/embed/' ~ video_id ~ '?enablejsapi=1&rel=0&modestbranding=1' %}
                                                 {% endif %}
                                             {% elif 'vimeo.com/' in video_url %}
                                                 {% set video_id = video_url.split('/')[-1].split('?')[0] %}
-                                                {# autoplay=0 veya autoplay kaldırıldı, JS ile kontrol edilecek #}
+                                                {# src boş bırakıldı, JS ile yüklenecek #}
                                                 {% set embed_url = 'https://player.vimeo.com/video/' ~ video_id ~ '?title=0&byline=0&portrait=0' %}
                                             {% endif %}
 
@@ -675,10 +696,8 @@ document.querySelectorAll('.video-collapse').forEach(collapseElement => {
         iframes.forEach(iframe => {
             // Collapse kapanırken videoyu durdurmak için src'yi sıfırla
             if (iframe.src) {
-                const currentSrc = iframe.src;
                 iframe.src = ""; // Videoyu durdur
-                // Orijinal data-src'yi geri yüklerken autoplay parametresini kaldır
-                // Bu sayede bir sonraki açılışta tekrar autoplay çalışır.
+                // Orijinal data-src'yi geri yükle (autoplay olmadan)
                 const dataSrc = iframe.getAttribute('data-src');
                 if (dataSrc) {
                     iframe.src = dataSrc; 
@@ -696,10 +715,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (showQuizResultId) {
         const quizCollapseElement = document.getElementById('quizCollapse' + showQuizResultId);
         if (quizCollapseElement) {
-            const bsCollapse = new bootstrap.Collapse(quizCollapseElement, {
-                toggle: false // Otomatik açılmasını engelle, sadece `show` sınıfını ekle
-            });
-            quizCollapseElement.classList.add('show'); // Manuel olarak 'show' sınıfını ekle
+            // Show the collapse element if it's not already open
+            if (!quizCollapseElement.classList.contains('show')) {
+                const bsCollapse = new bootstrap.Collapse(quizCollapseElement, {
+                    toggle: false // Otomatik açılmasını engelle, sadece `show` sınıfını ekle
+                });
+                quizCollapseElement.classList.add('show'); // Manuel olarak 'show' sınıfını ekle
+            }
             
             // Sayfayı kaydır
             quizCollapseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
