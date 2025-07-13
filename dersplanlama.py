@@ -820,6 +820,25 @@ def edit_konu(konu_id):
         return redirect(url_for('edit_konu', konu_id=konu.id))
     return render_template('edit_konu.html', konu=konu, dersler=dersler)
 
+# dersplanlama.py içinde, rotaların altına veya uygun bir yere ekle
+@app.cli.command("create-initial-admin")
+def create_initial_admin():
+    """Creates the initial admin user if it doesn't exist."""
+    with app.app_context():
+        if User.query.filter_by(username='admin').first() is None:
+            print("Admin kullanıcısı bulunamadı. Varsayılan admin kullanıcısı oluşturuluyor...")
+            admin_username = 'admin'
+            admin_password = 'Cemyildiz10.' # BURAYA KENDİ GÜVENLİ ŞİFRENI YAZ!
+
+            hashed_password = generate_password_hash(admin_password)
+            default_admin = User(username=admin_username, password=hashed_password, is_admin=True, expire_date=None) 
+
+            db.session.add(default_admin)
+            db.session.commit()
+            print(f"Varsayılan admin kullanıcısı '{admin_username}' başarıyla oluşturuldu.")
+        else:
+            print("Admin kullanıcısı zaten mevcut. Yeni admin oluşturulmadı.")
+
 
 @app.route("/admin/edit_alt_baslik/<int:alt_baslik_id>", methods=["GET", "POST"])
 @login_required
