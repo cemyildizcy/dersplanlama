@@ -431,7 +431,7 @@
                                         {% if alt_baslik.past_exam_materials %}
                                             {% for past_exam_material in alt_baslik.past_exam_materials %}
                                                 <a href="{{ url_for('download_past_exam_file', filename=past_exam_material.filename) }}" class="btn btn-sm btn-outline-secondary" target="_blank">
-                                                    <i class="bi bi-file-earmark-bar-graph-fill me-1"></i> Çıkmış Soru {{ loop.index }}
+                                                    <i class="bi bi-file-earmark-bar-graph-fill me-1"></i> Çıkmış/Çıkabilecek Sorular {{ loop.index }}
                                                 </a>
                                             {% endfor %}
                                         {% endif %}
