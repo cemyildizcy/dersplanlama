@@ -421,13 +421,19 @@
                                         {# Quiz Butonu #}
                                         {% if alt_baslik.quiz %}
                                             {% set quiz_attempt_data = quiz_results.get(alt_baslik.quiz.id) %}
-                                            {% set button_text = "Quiz Çöz" %}
-                                            {% if alt_baslik.quiz.quiz_type == 'past_exam' %}
-                                                {% set button_text = "Çıkmış/Çıkabilecek Sorular" %}
-                                            {% endif %}
+                                            {# Quiz tipi kaldırıldığı için her zaman "Quiz Çöz" olacak. #}
                                             <button type="button" class="btn btn-sm {% if quiz_attempt_data %}btn-info{% else %}btn-warning{% endif %}" data-bs-toggle="collapse" data-bs-target="#quizCollapse{{ alt_baslik.id }}" aria-expanded="{% if show_quiz_result and show_quiz_result == alt_baslik.id %}true{% else %}false{% endif %}" aria-controls="quizCollapse{{ alt_baslik.id }}">
-                                                <i class="bi bi-question-circle-fill me-1"></i> {{ button_text }} {% if quiz_attempt_data %}(Puan: {{ quiz_attempt_data.score }}%) {% endif %}
+                                                <i class="bi bi-question-circle-fill me-1"></i> Quiz Çöz {% if quiz_attempt_data %}(Puan: {{ quiz_attempt_data.score }}%) {% endif %}
                                             </button>
+                                        {% endif %}
+
+                                        {# Çıkmış/Çıkabilecek Soru Materyalleri Butonu #}
+                                        {% if alt_baslik.past_exam_materials %}
+                                            {% for past_exam_material in alt_baslik.past_exam_materials %}
+                                                <a href="{{ url_for('download_past_exam_file', filename=past_exam_material.filename) }}" class="btn btn-sm btn-outline-secondary" target="_blank">
+                                                    <i class="bi bi-file-earmark-bar-graph-fill me-1"></i> Çıkmış Soru {{ loop.index }}
+                                                </a>
+                                            {% endfor %}
                                         {% endif %}
                                         
                                         {# Tamamlandı butonu #}
@@ -456,7 +462,7 @@
                                             
                                             {# YouTube veya Vimeo linkini iframe src'ye dönüştürme mantığı #}
                                             {# ÖNEMLİ: YouTube URL'leri dinamik olarak değişebilir, bu yüzden anahtar kelimelerle kontrol etmek daha sağlamdır. #}
-                                            {% if 'youtube.com/watch?v=' in video_url or 'youtu.be/' in video_url %}
+                                            {% if 'youtube.com' in video_url or 'youtu.be' in video_url %}
                                                 {% set video_id = '' %}
                                                 {% if 'watch?v=' in video_url %}
                                                     {% set video_id = video_url.split('watch?v=')[-1].split('&')[0] %}

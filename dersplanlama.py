@@ -1,5 +1,6 @@
 # Gerekli kütüphaneleri ve modülleri import ediyoruz
 import os
+import json # JSON işlemleri için eklendi
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, jsonify, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -24,7 +25,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip', 'rar', 'txt'}
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip', 'rar', 'txt', 'jpg', 'jpeg', 'png', 'gif'} # JPEG, PNG, GIF eklendi
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 if not os.path.exists(UPLOAD_FOLDER):
@@ -69,8 +70,11 @@ class AltBaslik(db.Model):
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
+    # quiz ilişkisi uselist=False olarak eski haline getirildi
     quiz = db.relationship('Quiz', backref='alt_baslik_rel', lazy=True, uselist=False, cascade="all, delete-orphan")
     comments = db.relationship('Comment', backref='alt_baslik_rel', lazy=True, cascade="all, delete-orphan")
+    # YENİ EKLENEN SATIR: Çıkmış Soru Materyalleri için ilişki
+    past_exam_materials = db.relationship('PastExamMaterial', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
 
 class UserProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -103,11 +107,22 @@ class Material(db.Model):
     def __repr__(self):
         return f'<Material {self.original_filename}>'
 
+# YENİ MODEL: Çıkmış/Çıkabilecek Soru Materyali
+class PastExamMaterial(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<PastExamMaterial {self.original_filename}>'
+
 class Quiz(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     alt_baslik_id = db.Column(db.Integer, db.ForeignKey('alt_baslik.id'), nullable=False)
-    quiz_type = db.Column(db.String(50), nullable=False, default='normal') # quiz_type EKLENDİ
+    # quiz_type = db.Column(db.String(50), nullable=False, default='normal') # SİLİNDİ
     questions = db.relationship('Question', backref='quiz', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
@@ -116,7 +131,9 @@ class Quiz(db.Model):
 class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), nullable=False)
-    question_text = db.Column(db.Text, nullable=False) 
+    question_text = db.Column(db.Text, nullable=False)
+    # question_type = db.Column(db.String(50), nullable=False, default='multiple_choice') # SİLİNDİ
+    # correct_answer_text = db.Column(db.Text, nullable=True) # SİLİNDİ
     answers = db.relationship('Answer', backref='question', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
@@ -138,10 +155,8 @@ class UserQuizAttempt(db.Model):
     score = db.Column(db.Integer, nullable=False)
     attempt_date = db.Column(db.DateTime, default=datetime.utcnow)
     # Veritabanı türüne göre JSON sütunu tanımla
-    # PostgreSQL için db.JSONB veya db.JSON, SQLite için db.Text
-    details = db.Column(db.JSON if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgresql') else db.Text) 
+    details = db.Column(postgresql.JSONB if app.config['SQLALCHEMY_DATABASE_URI'].startswith('postgresql') else db.Text) 
 
-    # YENİ EKLENEN SATIR: Quiz modeli ile ilişki
     quiz = db.relationship('Quiz', backref='attempts_rel', lazy=True) 
 
     __table_args__ = (UniqueConstraint('user_id', 'quiz_id', name='_user_quiz_uc'),)
@@ -254,6 +269,18 @@ def admin_panel():
                             db.session.rollback()
                             return redirect(url_for('admin_panel'))
                     item_to_delete = material_to_delete
+                elif delete_type == "past_exam_material": # YENİ SİLME TÜRÜ
+                    past_exam_material_to_delete = PastExamMaterial.query.get_or_404(delete_id)
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], past_exam_material_to_delete.filename)
+                    if os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                        except OSError as e:
+                            current_app.logger.error(f"HATA: Çıkmış Soru dosyası silinirken hata oluştu {file_path}: {e}")
+                            flash(f"Çıkmış Soru dosyası silinirken bir hata oluştu: {e}", "danger")
+                            db.session.rollback()
+                            return redirect(url_for('admin_panel'))
+                    item_to_delete = past_exam_material_to_delete
                 
                 if item_to_delete:
                     if delete_type == 'user' and item_to_delete.username == 'admin':
@@ -261,7 +288,7 @@ def admin_panel():
                     else:
                         db.session.delete(item_to_delete)
                         db.session.commit()
-                        flash(f"{delete_type.capitalize()} başarıyla silindi.", "success")
+                        flash(f"{delete_type.replace('_',' ').capitalize()} başarıyla silindi.", "success")
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.error(f"HATA: Silme işlemi sırasında beklenmeyen bir hata oluştu ({delete_type} ID {delete_id}): {e}")
@@ -327,10 +354,8 @@ def admin_panel():
             alt_baslik_name = request.form.get("alt_baslik", "").strip()
             konu_id = request.form.get("konu_sec_alt", type=int)
             video_link = request.form.get("video", "").strip()
-            # Notlar kaldırıldı
-            # notlar = "" # Bu satır yok
             if alt_baslik_name and konu_id:
-                new_alt_baslik = AltBaslik(name=alt_baslik_name, konu_id=konu_id, video_link=video_link) # notlar parametresi kaldırıldı
+                new_alt_baslik = AltBaslik(name=alt_baslik_name, konu_id=konu_id, video_link=video_link)
                 db.session.add(new_alt_baslik)
                 db.session.commit()
                 flash(f"'{alt_baslik_name}' alt başlığı eklendi.", "success")
@@ -377,11 +402,39 @@ def admin_panel():
             else:
                 flash("Geçersiz dosya türü veya dosya yüklenemedi.", "danger")
             return redirect(url_for('admin_panel'))
+
+        elif action == "add_past_exam_material": # YENİ ACTION: Çıkmış Soru Materyali Yükleme
+            alt_baslik_id = request.form.get("alt_baslik_sec_past_exam", type=int)
+            if 'file' not in request.files:
+                flash("Çıkmış Soru materyali yüklenemedi: Dosya bulunamadı.", "danger")
+                return redirect(url_for('admin_panel'))
+            
+            file = request.files['file']
+            if file.filename == '':
+                flash("Çıkmış Soru materyali yüklenemedi: Dosya seçilmedi.", "danger")
+                return redirect(url_for('admin_panel'))
+            
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                unique_filename = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_past_exam_{filename}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+
+                new_past_exam_material = PastExamMaterial(
+                    alt_baslik_id=alt_baslik_id,
+                    filename=unique_filename,
+                    original_filename=file.filename
+                )
+                db.session.add(new_past_exam_material)
+                db.session.commit()
+                flash(f"'{file.filename}' çıkmış soru materyali başarıyla yüklendi.", "success")
+            else:
+                flash("Geçersiz dosya türü veya dosya yüklenemedi. İzin verilenler: pdf, doc, docx, ppt, pptx, xls, xlsx, zip, rar, txt, jpg, jpeg, png, gif.", "danger")
+            return redirect(url_for('admin_panel'))
         
         elif action == "add_quiz":
             alt_baslik_id = request.form.get("alt_baslik_sec_quiz", type=int)
             quiz_title = request.form.get("quiz_title", "").strip()
-            quiz_type = request.form.get("quiz_type", "normal") # quiz_type EKLENDİ
+            # quiz_type kaldırıldı
             
             question_texts = request.form.getlist("question_text[]")
             
@@ -389,19 +442,19 @@ def admin_panel():
                 flash("Quiz başlığı, alt başlık seçimi veya en az bir soru boş olamaz.", "danger")
                 return redirect(url_for('admin_panel'))
 
-            existing_quiz = Quiz.query.filter_by(alt_baslik_id=alt_baslik_id).first()
+            existing_quiz = Quiz.query.filter_by(alt_baslik_id=alt_baslik_id).first() # uselist=False olduğu için hala tek quiz
             if existing_quiz:
                 flash("Bu alt başlık için zaten bir quiz mevcut. Lütfen mevcut quizi silin veya düzenleyin.", "danger")
                 return redirect(url_for('admin_panel'))
 
-            new_quiz = Quiz(title=quiz_title, alt_baslik_id=alt_baslik_id, quiz_type=quiz_type) # quiz_type eklendi
+            new_quiz = Quiz(title=quiz_title, alt_baslik_id=alt_baslik_id) # quiz_type kaldırıldı
             db.session.add(new_quiz)
             db.session.flush()
 
             for i, q_text in enumerate(question_texts):
                 if not q_text.strip():
                     continue
-                new_question = Question(quiz_id=new_quiz.id, question_text=q_text.strip())
+                new_question = Question(quiz_id=new_quiz.id, question_text=q_text.strip()) # question_type, correct_answer_text kaldırıldı
                 db.session.add(new_question)
                 db.session.flush()
 
@@ -474,7 +527,7 @@ def user_panel():
     
     selected_ders_id = request.args.get('ders_id', type=int)
     selected_konu_id = request.args.get('konu_id', type=int)
-    show_quiz_result_alt_baslik_id = request.args.get('show_quiz_result', type=int) # Yeni eklenen URL parametresi
+    show_quiz_result_alt_baslik_id = request.args.get('show_quiz_result', type=int)
 
     selected_ders = Ders.query.get(selected_ders_id) if selected_ders_id else None
     selected_konu = Konu.query.get(selected_konu_id) if selected_konu_id else None
@@ -511,34 +564,29 @@ def user_panel():
     # Quiz sonuçlarını çekmek için ekstra sorgular (UserQuizAttempt.details'ı kullanacak)
     quiz_results = {}
     if selected_konu and user:
-        # Alt başlıkların quizlerini ve o quizlere ait kullanıcı denemelerini önceden yükle
         quiz_attempts = db.session.query(UserQuizAttempt).filter_by(user_id=user.id)\
                         .options(joinedload(UserQuizAttempt.quiz).joinedload(Quiz.questions).joinedload(Question.answers))\
                         .all()
         
-        # Denemeleri quiz_id'ye göre bir dictionary'ye al
         attempts_by_quiz_id = {attempt.quiz_id: attempt for attempt in quiz_attempts}
 
         for alt_baslik in selected_konu.alt_basliklar:
             if alt_baslik.quiz and alt_baslik.quiz.id in attempts_by_quiz_id:
                 attempt = attempts_by_quiz_id[alt_baslik.quiz.id]
                 
-                # SQLAlchemy'nin JSON türü otomatik olarak Python dict'e dönüştürür.
-                # db.Text olarak saklıyorsak, manuel json.loads yapmak gerekebilir.
-                if isinstance(attempt.details, str): # Eğer TEXT olarak saklanıyorsa
-                     import json
+                if isinstance(attempt.details, str):
                      try:
                          parsed_details = json.loads(attempt.details)
                      except json.JSONDecodeError:
-                         parsed_details = [] # Hata olursa boş liste
-                else: # Eğer db.JSON veya benzeri bir tipse, zaten dict/list olarak gelir
+                         parsed_details = []
+                else:
                     parsed_details = attempt.details if attempt.details else []
                 
                 quiz_results[alt_baslik.quiz.id] = {
                     'score': attempt.score,
                     'attempt_date': attempt.attempt_date,
-                    'details': parsed_details, # Çözümlenmiş JSON detayları
-                    'id': attempt.id # Quiz denemesinin ID'si (silmek için)
+                    'details': parsed_details,
+                    'id': attempt.id
                 }
     
     return render_template('user.html', 
@@ -550,10 +598,10 @@ def user_panel():
                            completion_percentage=completion_percentage,
                            active_announcements=active_announcements,
                            recommended_alt_basliks=unique_recommended_alt_basliks,
-                           UserQuizAttempt=UserQuizAttempt, # Sadece model referansı
+                           UserQuizAttempt=UserQuizAttempt,
                            session=session,
-                           quiz_results=quiz_results, # Geliştirilmiş quiz sonuçları
-                           show_quiz_result=show_quiz_result_alt_baslik_id # Quiz sonucunu otomatik açmak için
+                           quiz_results=quiz_results,
+                           show_quiz_result=show_quiz_result_alt_baslik_id
                            )
 
 @app.route("/mark_completed", methods=["POST"])
@@ -616,7 +664,6 @@ def submit_quiz():
         user_selected_answer_text = "Cevap verilmedi"
         correct_answer_text = "Belirtilmedi"
 
-        # Doğru cevabı ve kullanıcının seçtiği cevabı bul
         for answer in question.answers:
             if answer.is_correct:
                 correct_answer_text = answer.answer_text
@@ -639,15 +686,15 @@ def submit_quiz():
     if user_attempt:
         user_attempt.score = score
         user_attempt.attempt_date = datetime.utcnow()
-        user_attempt.details = quiz_attempt_details # Detaylar güncellendi
+        user_attempt.details = quiz_attempt_details
     else:
-        new_attempt = UserQuizAttempt(user_id=user_id, quiz_id=quiz_id, score=score, details=quiz_attempt_details) # Detaylar eklendi
+        new_attempt = UserQuizAttempt(user_id=user_id, quiz_id=quiz_id, score=score, details=quiz_attempt_details)
         db.session.add(new_attempt)
     
     db.session.commit()
     flash(f"Quizi tamamladınız! Puanınız: {score}%", "success")
 
-    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id, show_quiz_result=alt_baslik_id)) # Quiz sonucunu göstermek için parametre
+    return redirect(url_for('user_panel', ders_id=selected_ders_id, konu_id=selected_konu_id, show_quiz_result=alt_baslik_id))
 
 @app.route("/delete_quiz_attempt", methods=["POST"])
 @login_required
@@ -768,6 +815,22 @@ def download_file(filename):
     
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True, download_name=material.original_filename)
 
+@app.route('/download_past_exam/<filename>') # YENİ ROTA
+@login_required
+def download_past_exam_file(filename):
+    user = User.query.get(session['user_id'])
+    if not user or (user.expire_date and datetime.utcnow() >= (user.expire_date + timedelta(days=1))):
+        flash("Dosyayı indirme yetkiniz bulunmamaktadır. Erişim süreniz dolmuş olabilir.", "danger")
+        return redirect(url_for('user_panel'))
+        
+    past_exam_material = PastExamMaterial.query.filter_by(filename=filename).first()
+    if not past_exam_material:
+        flash("İndirilecek çıkmış soru dosyası bulunamadı.", "danger")
+        return redirect(url_for('user_panel'))
+    
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True, download_name=past_exam_material.original_filename)
+
+
 # --- DÜZENLEME ROTLARI ---
 
 @app.route("/admin/edit_ders/<int:ders_id>", methods=["GET", "POST"])
@@ -831,8 +894,6 @@ def edit_alt_baslik(alt_baslik_id):
     if request.method == "POST":
         new_name = request.form.get("name", "").strip()
         new_video_link = request.form.get("video_link", "").strip()
-        # Notlar kaldırıldı
-        # new_notlar = request.form.get("notlar", "").strip() # Bu satır yok
         new_konu_id = request.form.get("konu_id", type=int)
 
         if not new_name or not new_konu_id:
@@ -848,12 +909,11 @@ def edit_alt_baslik(alt_baslik_id):
             else:
                 alt_baslik.name = new_name
                 alt_baslik.video_link = new_video_link
-                # alt_baslik.notlar kaldırıldı, bu satır yoktu
                 alt_baslik.konu_id = new_konu_id
                 db.session.commit()
                 flash(f"'{alt_baslik.name}' alt başlığı başarıyla güncellendi.", "success")
                 return redirect(url_for('admin_panel'))
-        return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler) # Redirekten önce render edildi
+        return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler)
     return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler)
 
 
