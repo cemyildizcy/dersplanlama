@@ -69,7 +69,6 @@ class AltBaslik(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     video_link = db.Column(db.Text)
-    notlar = db.Column(db.Text)
     konu_id = db.Column(db.Integer, db.ForeignKey('konu.id'), nullable=False)
     progress_records = db.relationship('UserProgress', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
     materials = db.relationship('Material', backref='alt_baslik', lazy=True, cascade="all, delete-orphan")
