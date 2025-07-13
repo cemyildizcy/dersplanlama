@@ -92,10 +92,6 @@
                         <input type="text" class="form-control" id="video_link" name="video_link" value="{{ alt_baslik.video_link or '' }}">
                     </div>
                     <div class="mb-3">
-                        <label for="notlar" class="form-label">Ders Notları</label>
-                        <textarea class="form-control" id="notlar" name="notlar" rows="3">{{ alt_baslik.notlar or '' }}</textarea>
-                    </div>
-                    <div class="mb-3">
                         <label for="konu_id" class="form-label">Konu</label>
                         <select id="konu_id" name="konu_id" class="form-select" required>
                             {% for ders in dersler %}
