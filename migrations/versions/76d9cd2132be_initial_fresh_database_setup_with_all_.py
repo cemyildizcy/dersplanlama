@@ -1,8 +1,8 @@
-"""Initial complete database setup with quiz details and comments
+"""Initial fresh database setup with all features and fixes
 
-Revision ID: 60ca84d3c628
+Revision ID: 76d9cd2132be
 Revises: 
-Create Date: 2025-07-13 10:27:45.688176
+Create Date: 2025-07-13 12:59:25.739605
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '60ca84d3c628'
+revision = '76d9cd2132be'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -52,7 +52,6 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=200), nullable=False),
     sa.Column('video_link', sa.Text(), nullable=True),
-    sa.Column('notlar', sa.Text(), nullable=True),
     sa.Column('konu_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['konu_id'], ['konu.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -82,6 +81,7 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(length=200), nullable=False),
     sa.Column('alt_baslik_id', sa.Integer(), nullable=False),
+    sa.Column('quiz_type', sa.String(length=50), nullable=False),
     sa.ForeignKeyConstraint(['alt_baslik_id'], ['alt_baslik.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -108,7 +108,7 @@ def upgrade():
     sa.Column('quiz_id', sa.Integer(), nullable=False),
     sa.Column('score', sa.Integer(), nullable=False),
     sa.Column('attempt_date', sa.DateTime(), nullable=True),
-    sa.Column('details', sa.JSON(), nullable=True),
+    sa.Column('details', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['quiz_id'], ['quiz.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
     sa.PrimaryKeyConstraint('id'),

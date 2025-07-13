@@ -857,7 +857,29 @@ def edit_alt_baslik(alt_baslik_id):
     return render_template('edit_alt_baslik.html', alt_baslik=alt_baslik, dersler=dersler)
 
 
+# dersplanlama.py dosyasının en altına, app.run() çağrısından hemen önce ekle.
+# Bu kod, uygulamanın her deployunda veya yeniden başlatıldığında çalışır.
+# Sadece admin kullanıcısı oluşturulduktan sonra KALDIRILMALIDIR!
+
+with app.app_context(): # Flask uygulama bağlamına gir
+    # Veritabanında hiç kullanıcı yoksa varsayılan admin kullanıcısını oluştur
+    # VEYA sadece 'admin' kullanıcısı yoksa oluştur
+    if User.query.filter_by(username='admin').first() is None:
+        print("Admin kullanıcısı bulunamadı. Varsayılan admin kullanıcısı oluşturuluyor...")
+        admin_username = 'admin'
+        admin_password = 'Cemyildiz10.' # BURAYA KENDİ ÇOK GÜVENLİ ŞİFRENİ YAZ!
+
+        hashed_password = generate_password_hash(admin_password)
+        default_admin = User(username=admin_username, password=hashed_password, is_admin=True, expire_date=None) 
+
+        db.session.add(default_admin)
+        db.session.commit()
+        print(f"Varsayılan admin kullanıcısı '{admin_username}' başarıyla oluşturuldu.")
+    else:
+        print("Admin kullanıcısı zaten mevcut. Yeni admin oluşturulmadı.")
+
 if __name__ == '__main__':
+    app.run(debug=True)
     # Flask uygulaması bağlamına girerek ilk çalıştırmada admin kullanıcısı oluştur
     with app.app_context():
         # Sadece 'admin' kullanıcısı yoksa oluştur
